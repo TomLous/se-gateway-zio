@@ -1,23 +1,20 @@
+import org.apache.kafka.clients.producer._
+import org.apache.kafka.common.header.Header
+import org.apache.kafka.common.header.internals.RecordHeader
 import org.json4s.JsonAST.JObject
 import org.json4s._
 import org.json4s.native.JsonMethods._
 import sttp.client3._
-import sttp.client3.httpclient.zio.{HttpClientZioBackend, SttpClient, send}
+import sttp.client3.httpclient.zio._
 import zio._
-import zio.logging._
-
-import java.time.LocalDateTime
-
-//import scala.concurrent.duration._
-import org.apache.kafka.clients.producer.{ProducerRecord, RecordMetadata}
-import org.apache.kafka.common.header.Header
-import org.apache.kafka.common.header.internals.RecordHeader
 import zio.duration._
 import zio.kafka.producer._
 import zio.kafka.serde._
+import zio.logging._
 import zio.stream.ZStream
 
 import java.nio.charset.StandardCharsets
+import java.time.LocalDateTime
 import scala.jdk.CollectionConverters._
 import scala.language.postfixOps
 import scala.util.Try
@@ -42,8 +39,10 @@ object Main extends App {
     TransactionalProducerSettings(kafkaProducerSettings, "dnwg-all-transaction")
   private val kafkaTopic = "test-topic"
 
+  // to add some meta data for headers ect to the json blobs
   case class MeteringData(json: String, batch: String, index: Long)
 
+  // for parsing raw json
   implicit val format = org.json4s.DefaultFormats
 
   // config the env for this app
@@ -56,11 +55,13 @@ object Main extends App {
     loggingLayer ++
       HttpClientZioBackend.layer() ++
       ZLayer.fromManaged(TransactionalProducer.make(kafkaTransactionalProducerSettings))
-//      Producer.make(kafkaProducerSettings))
 
-  // PURE FUNCTIONS => NO SIDE EFFECTS
+  // FUNCTIONS
+
+  // gets the last offset
   val getOffset: LocalDateTime = LocalDateTime.parse("2022-01-18T22:00:00")
 
+  // does the http api call
   val getAllRequest: LocalDateTime => LocalDateTime => Request[Either[String, String], Any] =
     fromIsoDate =>
       toIsoDate =>
@@ -92,12 +93,8 @@ object Main extends App {
     }.asJava
 
   // generate the kafka message
-  val createRecord: MeteringData => ProducerRecord[String, String] = meteringData => {
-    val headers = getRecordHeaders(meteringData)
-    new ProducerRecord[String, String](kafkaTopic, null, null, null, meteringData.json, headers)
-  }
-
-  // SIDE EFFECTS HERE
+  val createRecord: MeteringData => ProducerRecord[String, String] = meteringData =>
+    new ProducerRecord[String, String](kafkaTopic, null, null, null, meteringData.json, getRecordHeaders(meteringData))
 
   // produce a bunch of records per chunk on within a transaction
   val produceRecords: Transaction => Chunk[ProducerRecord[String, String]] => RIO[ZEnv with Has[TransactionalProducer], Chunk[RecordMetadata]] =
@@ -153,6 +150,7 @@ object Main extends App {
             .as(ExitCode(0))
       )
       .provideCustomLayer(allLayers)
+      .retryN(3)
       .orDie
   }
 }
