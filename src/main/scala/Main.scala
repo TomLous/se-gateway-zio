@@ -47,7 +47,6 @@ object Main extends App {
     TransactionalProducerSettings(kafkaProducerSettings, "dnwg-all-transaction")
   private val kafkaTopic = "test-topic"
 
-
   implicit val format = org.json4s.DefaultFormats
 
   // config the env for this app
