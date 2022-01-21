@@ -1,31 +1,26 @@
-import org.apache.kafka.clients.producer.ProducerConfig
+import org.json4s.JsonAST.JObject
+import org.json4s._
+import org.json4s.native.JsonMethods._
 import sttp.client3._
 import sttp.client3.httpclient.zio.{HttpClientZioBackend, SttpClient, send}
 import zio._
-import zio.console.{Console, putStrLn}
+import zio.logging._
 
 import java.time.LocalDateTime
-import zio.clock.Clock
-import zio.logging._
-import zio.system.System
-import org.json4s._
-import org.json4s.JsonAST.{JArray, JNothing, JObject}
-import org.json4s.native.JsonMethods._
 
 //import scala.concurrent.duration._
-import zio.duration._
-import scala.jdk.CollectionConverters._
-import scala.language.postfixOps
-import scala.util.Try
-import zio.kafka.producer._
-import zio.kafka.serde._
 import org.apache.kafka.clients.producer.{ProducerRecord, RecordMetadata}
 import org.apache.kafka.common.header.Header
 import org.apache.kafka.common.header.internals.RecordHeader
-import sttp.capabilities.zio.ZioStreams
+import zio.duration._
+import zio.kafka.producer._
+import zio.kafka.serde._
 import zio.stream.ZStream
 
-import java.nio.charset.{Charset, StandardCharsets}
+import java.nio.charset.StandardCharsets
+import scala.jdk.CollectionConverters._
+import scala.language.postfixOps
+import scala.util.Try
 
 object Main extends App {
 
@@ -42,10 +37,12 @@ object Main extends App {
     "ce_source"      -> sourceName,
     "ce_id"          -> "1234"
   )
-  private val kafkaProducerSettings = ProducerSettings(List("localhost:29092","localhost:29093","localhost:29094"))
+  private val kafkaProducerSettings = ProducerSettings(List("localhost:29092", "localhost:29093", "localhost:29094"))
   private val kafkaTransactionalProducerSettings =
     TransactionalProducerSettings(kafkaProducerSettings, "dnwg-all-transaction")
   private val kafkaTopic = "test-topic"
+
+  case class MeteringData(json: String, batch: String, index: Long)
 
   implicit val format = org.json4s.DefaultFormats
 
@@ -74,66 +71,73 @@ object Main extends App {
             uri"""$dnwgHost/api/v1/meteringPoints/all/meteringdata/interval?periodStartdate=$fromIsoDate&periodEnddate=$toIsoDate&extendedData=registerreading"""
           )
 
-  val extractMeteringPoints: JValue => List[String] =
-    json =>
-      (json \\ "items")
-        .extract[List[JObject]]
-        .map(jval => compact(render(jval)))
+  // extract the raw json items and wrap them in a nice metadata object
+  val extractMeteringPoints: String => JValue => List[MeteringData] =
+    batchName =>
+      json =>
+        (json \\ "items")
+          .extract[List[JObject]]
+          .map(jval => compact(render(jval)))
+          .zipWithIndex
+          .map { case (json, idx) =>
+            MeteringData(json, batchName, idx)
+          }
 
-  val getRecordHeaders: String => java.util.List[RecordHeader] =
-    json => {
-      dnwgHeaders.map { case (k, v) => new RecordHeader(k, v.getBytes("UTF-8")) }.toList.asJava
-    }
+  val getRecordHeaders: MeteringData => java.lang.Iterable[Header] = meteringData =>
+    (dnwgHeaders ++ Map(
+      "batch" -> meteringData.batch,
+      "index" -> meteringData.index.toString
+    )).map { case (k, v) =>
+      new RecordHeader(k, v.getBytes(StandardCharsets.UTF_8)).asInstanceOf[Header]
+    }.asJava
+
+  // generate the kafka message
+  val createRecord: MeteringData => ProducerRecord[String, String] = meteringData => {
+    val headers = getRecordHeaders(meteringData)
+    new ProducerRecord[String, String](kafkaTopic, null, null, null, meteringData.json, headers)
+  }
+
+  // SIDE EFFECTS HERE
+
+  // produce a bunch of records per chunk on within a transaction
+  val produceRecords: Transaction => Chunk[ProducerRecord[String, String]] => RIO[ZEnv with Has[TransactionalProducer], Chunk[RecordMetadata]] =
+    transaction => chunk => transaction.produceChunk(chunk, Serde.string, Serde.string, None)
 
   // BETTER ERRORS
 
   // Tries to get the json error message, otherwise just the original message
-  val apiErrorJson: String => Exception = json =>
-    new Exception(Try((parse(json) \\ "error").extract[String]).getOrElse(json))
+  val apiErrorJson: String => Exception = json => new Exception(Try((parse(json) \\ "error").extract[String]).getOrElse(json))
 
   // Better verbosity
-  val wrapException: String => Throwable => Throwable = message =>
-    ex => new Exception(s"$message: ${ex.getMessage}", ex)
-
-  //  val sendMeteringPoint: String => ZIO[SttpClient with Logging, Throwable, Unit] =
-  //    jsonStr => {
-  //      log.debug(jsonStr)
-  //      // String topic, Integer partition, Long timestamp, K key, V value, Iterable<Header> headers
-  //      val record  = new ProducerRecord(kafkaTopic, null, null, null, jsonStr, getHeaders(""))
-  //      Producer.produce(record)
-  //    }
+  val wrapException: String => Throwable => Throwable = message => ex => new Exception(s"$message: ${ex.getMessage}", ex)
 
   // This will return the meteringpoints as a list of points as json strings from the endpoint. No type checking at t
-  val getMeteringPoints: ZIO[SttpClient with Logging, Throwable, List[String]] = for {
-    fromDateTime   <- ZIO.succeed(getOffset)
-    toDateTime     <- ZIO.succeed(fromDateTime.plusHours(1))
-    _              <- log.debug(s"From date $fromDateTime - $toDateTime")
-    response       <- send(getAllRequest(fromDateTime)(toDateTime)).mapError(wrapException("API call failed"))
-    body           <- ZIO.fromEither(response.body).mapError(apiErrorJson)
-    _              <- log.debug(s"Received ${body.length} bytes")
-    json           <- ZIO(parse(body)).mapError(wrapException("Parsing json body failed"))
-    meteringPoints <- ZIO(extractMeteringPoints(json)).mapError(wrapException("Extracting json body failed"))
-    _              <- log.debug(s"Received ${meteringPoints.size} items from endpoint")
+  val getMeteringPoints: ZIO[SttpClient with Logging, Throwable, List[MeteringData]] = for {
+    fromDateTime <- ZIO.succeed(getOffset)
+    toDateTime   <- ZIO.succeed(fromDateTime.plusHours(1))
+    _            <- log.debug(s"From date $fromDateTime - $toDateTime")
+    response     <- send(getAllRequest(fromDateTime)(toDateTime)).mapError(wrapException("API call failed"))
+    body         <- ZIO.fromEither(response.body).mapError(apiErrorJson)
+    _            <- log.debug(s"Received ${body.length} bytes")
+    json         <- ZIO(parse(body)).mapError(wrapException("Parsing json body failed"))
+    meteringPoints <- ZIO(extractMeteringPoints(s"$fromDateTime-$toDateTime")(json))
+                        .mapError(wrapException("Extracting json body failed"))
+    _ <- log.debug(s"Received ${meteringPoints.size} items from endpoint")
   } yield meteringPoints
-
-  val createRecord: String => ProducerRecord[String, String] = json =>
-    new ProducerRecord[String, String](kafkaTopic, null, null, null, json)
-
-  val sendRecords
-    : Transaction => Chunk[ProducerRecord[String, String]] => RIO[ZEnv with Has[TransactionalProducer], Chunk[RecordMetadata]] =
-    transaction => chunk => transaction.produceChunk(chunk, Serde.string, Serde.string, None)
 
   val program = for {
     meteringPoints <- getMeteringPoints
     _ <- TransactionalProducer.createTransaction.use { transaction =>
            ZStream
              .fromIterable(meteringPoints)
-//        .tap(json => log.debug(json))
              .map(createRecord)
-             .mapChunksM(sendRecords(transaction))
-             .tap(e => log.debug(e.toString))
+             .mapChunksM(produceRecords(transaction))
              .runDrain
          }
+    _ <-
+      log.debug(
+        s"Wrote ${meteringPoints.size} to kafka topic ${kafkaTopic} using batch ${meteringPoints.headOption.map(_.batch).getOrElse("N/A")}"
+      )
   } yield ()
 
   override def run(args: List[String]): URIO[zio.ZEnv, ExitCode] = {
