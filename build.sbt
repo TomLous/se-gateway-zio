@@ -12,7 +12,7 @@ lazy val root = (project in file("."))
       "dev.zio" %% "zio-streams" % "1.0.12",
       "dev.zio" %% "zio-kafka"   % "0.17.3",
       "org.json4s" %% "json4s-native"% "4.0.2",
-      "dev.zio" %% "zio-logging" % "0.5.14",
+      "dev.zio" %% "zio-logging-slf4j" % "0.5.14",
       "com.softwaremill.sttp.client3" %% "httpclient-backend-zio" % "3.3.17",
       "dev.zio" %% "zio-test" % "1.0.13" % Test
     ),

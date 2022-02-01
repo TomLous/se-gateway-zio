@@ -23,6 +23,25 @@ object Main extends App {
 
   // put these in config
 
+  case class ApiConfig(
+    host: String,
+    token: String,
+    readTimeout: Duration
+  )
+
+  case class KafkaConfig(
+    brokers: List[String],
+    topic: String,
+    transactionId: String,
+    defaultHeaders: Map[String, String])
+
+  case class MainConfig(
+    name: String,
+    api: ApiConfig,
+    kafka: KafkaConfig,
+    logLevel: LogLevel
+  )
+
   private val sourceName         = "DNWG/all"
   private val logLevel           = LogLevel.Debug
   private val dnwgHost           = "https://emi.dnwg.nl"
@@ -60,6 +79,15 @@ object Main extends App {
 
   // gets the last offset
   val getOffset: LocalDateTime = LocalDateTime.parse("2022-01-18T22:00:00")
+
+
+  val getMeteringPointsRequest:  Request[Either[String, String], Any] =
+        basicRequest.auth
+          .bearer(dnwgApiToken)
+          .readTimeout(dnwgApiReadTimeout.asScala)
+          .get(
+            uri"""$dnwgHost/api/v1/meteringPoints"""
+          )
 
   // does the http api call
   val getAllRequest: LocalDateTime => LocalDateTime => Request[Either[String, String], Any] =
@@ -114,10 +142,14 @@ object Main extends App {
     toDateTime   <- ZIO.succeed(fromDateTime.plusHours(1))
     _            <- log.debug(s"From date $fromDateTime - $toDateTime")
     response     <- send(getAllRequest(fromDateTime)(toDateTime)).mapError(wrapException("API call failed"))
+    response2     <- send(getMeteringPointsRequest).mapError(wrapException("API call failed"))
+    body2        <- ZIO.fromEither(response2.body).mapError(apiErrorJson)
+    _             <- log.debug(body2.take(1000))
     body         <- ZIO.fromEither(response.body).mapError(apiErrorJson)
+    _             <- log.debug(body.take(1000))
     _            <- log.debug(s"Received ${body.length} bytes")
     json         <- ZIO(parse(body)).mapError(wrapException("Parsing json body failed"))
-    meteringPoints <- ZIO(extractMeteringPoints(s"$fromDateTime-$toDateTime")(json))
+    meteringPoints <- ZIO(extractMeteringPoints(s"$fromDateTime/$toDateTime")(json))
                         .mapError(wrapException("Extracting json body failed"))
     _ <- log.debug(s"Received ${meteringPoints.size} items from endpoint")
   } yield meteringPoints
