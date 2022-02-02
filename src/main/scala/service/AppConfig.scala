@@ -8,13 +8,11 @@ import zio.{Has, ULayer, ZIO}
 
 case class AppConfig(
   name: String,
-  dnwg: DNWGApi.Config
+  dnwgApi: DNWGApi.Config,
+  offset: Offset.Config
 )
 
 object AppConfig {
-
-  type AppConfigEnv = Has[AppConfig]
-
 
   private val descriptor = DeriveConfigDescriptor.descriptor[AppConfig]
 

@@ -1,4 +1,4 @@
-import service.{AppConfig, DNWGApi}
+import service.{AppConfig, DNWGApi, Offset}
 import sttp.client3.httpclient.zio._
 import zio._
 import zio.clock.Clock
@@ -6,44 +6,32 @@ import zio.config.syntax._
 import zio.console.Console
 import zio.logging._
 
-import java.time.LocalDate
 import scala.language.postfixOps
 
 object Main extends App {
 
-  private val sourceName = "DNWG/all"
   private val logLevel   = LogLevel.Debug
 
-
-
-  private val loggingLayer:ZLayer[Has[AppConfig] with Console with Clock, Nothing, Logging] =
+  private val loggingLayerBase:ZLayer[Has[AppConfig] with Console with Clock, Nothing, Logging] =
     Logging.console(
           logLevel = logLevel,
           format = LogFormat.ColoredLogFormat()
-        )>>> Logging.withRootLoggerName("fff")
+        )>>> Logging.withRootLoggerName("dummy")
 
 
-
-//  {
-//   Logging.console(
-//      logLevel = logLevel,
-//      format = LogFormat.ColoredLogFormat()
-//    ) >>> Logging.withRootLoggerName(config)
-//  }
-
-//  private val dnwgApiLayer = cfg.narrow  DNWGApi.live
-
-  val logging =  (Console.live ++ Clock.live ++  AppConfig.live) >>> loggingLayer
-
-  val getOffset: LocalDate = LocalDate.parse("2022-01-18")
+  val loggingLayer = (Console.live ++ Clock.live ++  AppConfig.live) >>> loggingLayerBase
+  val offsetLayer = AppConfig.live.narrow(_.offset) >>> Offset.live // feed config into offset.live
+  val dnwgApiLayer = (AppConfig.live.narrow(_.dnwgApi) ++ HttpClientZioBackend.managed().toLayer) >>> DNWGApi.live // feed config + http client into api.live
 
   // put these in config
   override def run(args: List[String]): URIO[zio.ZEnv, ExitCode] = {
     (for {
-      _ <- log.debug("test")
-      fromDate <- ZIO.succeed(getOffset)
-      api <- ZIO.service[DNWGApi.Service]
-      ff <- api.getMeteringPoints
+      _ <- log.debug("Starting App")
+      offsetService <- ZIO.service[Offset.Service]
+      fromDate <- offsetService.getOffset
+      _ <- log.debug("From: " +fromDate)
+      dnwgApi <- ZIO.service[DNWGApi.Service]
+      ff <- dnwgApi.getMeteringPoints
       _ <- log.debug("Points: " +ff.size)
     } yield ())
       .foldM(
@@ -56,10 +44,7 @@ object Main extends App {
                   .info("Success")
                   .as(ExitCode(0))
             )
-      .provideCustomLayer(
-        logging ++
-          ((AppConfig.live.narrow(_.dnwg) ++ HttpClientZioBackend.managed().toLayer) >>> DNWGApi.live)
-      )
+      .provideCustomLayer(loggingLayer ++ offsetLayer ++ dnwgApiLayer)
       .exitCode
   }
 
