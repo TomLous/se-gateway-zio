@@ -1,37 +1,30 @@
-import service.{AppConfig, DNWGApi, Offset}
+import service.{AppConfig, AppLogging, DNWGApi, Offset}
 import sttp.client3.httpclient.zio._
 import zio._
-import zio.clock.Clock
 import zio.config.syntax._
-import zio.console.Console
 import zio.logging._
 
 import scala.language.postfixOps
 
 object Main extends App {
 
-  private val logLevel   = LogLevel.Debug
 
-  private val loggingLayerBase:ZLayer[Has[AppConfig] with Console with Clock, Nothing, Logging] =
-    Logging.console(
-          logLevel = logLevel,
-          format = LogFormat.ColoredLogFormat()
-        )>>> Logging.withRootLoggerName("dummy")
+  // Define env
+  private val loggingLayer = AppLogging.defautLayer
 
+  private val offsetConfig = AppConfig.live.narrow(_.offset)
+  private val offsetLayer = offsetConfig >>> Offset.live // feed config into offset.live
 
-  val loggingLayer = (Console.live ++ Clock.live ++  AppConfig.live) >>> loggingLayerBase
-  val offsetLayer = AppConfig.live.narrow(_.offset) >>> Offset.live // feed config into offset.live
-  val dnwgApiLayer = (AppConfig.live.narrow(_.dnwgApi) ++ HttpClientZioBackend.managed().toLayer) >>> DNWGApi.live // feed config + http client into api.live
+  private val dnwgApiConfig =  AppConfig.live.narrow(_.dnwgApi)
+  private val dnwgApiLayer = (dnwgApiConfig ++ HttpClientZioBackend.managed().toLayer) >>> DNWGApi.live // feed config + http client into api.live
 
   // put these in config
   override def run(args: List[String]): URIO[zio.ZEnv, ExitCode] = {
     (for {
       _ <- log.debug("Starting App")
-      offsetService <- ZIO.service[Offset.Service]
-      fromDate <- offsetService.getOffset
-      _ <- log.debug("From: " +fromDate)
-      dnwgApi <- ZIO.service[DNWGApi.Service]
-      ff <- dnwgApi.getMeteringPoints
+      fromDate <- Offset.getOffset
+      ff <- DNWGApi.getMeteringPoints
+      _ <- Offset.setOffset(fromDate)
       _ <- log.debug("Points: " +ff.size)
     } yield ())
       .foldM(

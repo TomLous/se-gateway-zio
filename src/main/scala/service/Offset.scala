@@ -16,10 +16,17 @@ object Offset {
     def setOffset(localDate: LocalDate): ZIO[Logging, OffsetError, Unit]
   }
 
+  // accessors
+  def getOffset: ZIO[Has[Offset.Service] with Logging, OffsetError, LocalDate] =
+    ZIO.accessM(_.get.getOffset)
+
+  def setOffset(localDate: LocalDate): ZIO[Has[Offset.Service] with Logging, OffsetError, Unit] =
+    ZIO.accessM(_.get.setOffset(localDate))
+
   // Possible errors
-  sealed trait OffsetError
-  case class OffsetReadError(error: String)  extends OffsetError
-  case class OffsetWriteError(error: String) extends OffsetError
+  sealed abstract class OffsetError(error: String, cause: Option[Throwable]=None) extends Exception(error, cause.orNull)
+  case class OffsetReadError(error: String, cause: Option[Throwable]=None)  extends OffsetError(error, cause)
+  case class OffsetWriteError(error: String, cause: Option[Throwable]=None) extends OffsetError(error, cause)
 
   // Config for the API
   case class Config(path: String, defaultOffset: LocalDate)
@@ -31,6 +38,7 @@ object Offset {
       OffsetServiceLive
     }
 
+
   case class OffsetServiceLive(config: Offset.Config) extends Offset.Service {
     override def getOffset: ZIO[Logging, OffsetError, LocalDate] =
       for {
@@ -38,10 +46,10 @@ object Offset {
         data <- ZIO(Source.fromFile(config.path)(StandardCharsets.UTF_8))
                   .map(_.mkString)
                   .tapError(_ => log.warn(s"No offset found, using default: ${config.defaultOffset}"))
-                  .fold(_ => config.defaultOffset.toString, x => x)
+                  .fold(_ => config.defaultOffset.toString, offset => offset)
         _ <- log.debug(s"Found data: $data")
         date <- ZIO(LocalDate.parse(data))
-                  .mapError(e => OffsetReadError(e.getMessage))
+                  .mapError(e => OffsetReadError("Failed to read offset", Some(e)))
         _ <- log.debug(s"Offset: $date")
       } yield date
 
@@ -50,11 +58,11 @@ object Offset {
         _ <- log.debug(s"Writing $localDate to file: ${config.path}").toManaged_
         writer <- ZManaged.fromAutoCloseable(
                     ZIO(new PrintWriter(config.path, StandardCharsets.UTF_8))
-                      .mapError(t => OffsetWriteError(t.getMessage))
+                      .mapError(t => OffsetWriteError("Failed to open offset writer", Some(t)))
                   )
         _ <- log.debug("Opened offset writer").toManaged_
         _ <- ZIO(writer.print(localDate.toString))
-               .mapError(t => OffsetWriteError(t.getMessage))
+               .mapError(t => OffsetWriteError("Failed to write offset", Some(t)))
                .toManaged_
       } yield ()).useNow
 

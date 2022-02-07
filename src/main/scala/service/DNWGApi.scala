@@ -20,6 +20,13 @@ object DNWGApi {
     def getMeteringPoints: ZIO[Logging, DNWGApiError, List[MeteringPoint]]
   }
 
+  // accessors (to make live easier)
+  def getAllRequest(fromDate: LocalDate, toDate: LocalDate): ZIO[Has[DNWGApi.Service] with Logging, DNWGApiError, List[MeteringPointData]] =
+    ZIO.accessM(_.get.getAllRequest(fromDate, toDate))
+
+  def getMeteringPoints: ZIO[Has[DNWGApi.Service] with Logging, DNWGApiError, List[MeteringPoint]] =
+    ZIO.accessM(_.get.getMeteringPoints)
+
   // This is the live Service definition. To create the service we need Config, A SttpClient. The service always succeeds
   val live: ZLayer[Has[DNWGApi.Config] with Has[SttpClient.Service], Nothing, Has[DNWGApi.Service]] =
     // Config + Sttpclient => API Service
@@ -28,9 +35,9 @@ object DNWGApi {
     }
 
   // Possible errors
-  sealed trait DNWGApiError
-  case class RequestError(error: String) extends DNWGApiError
-  case class JSONError(error: String)    extends DNWGApiError
+  sealed abstract class DNWGApiError(error: String, cause: Option[Throwable]=None) extends Exception(error, cause.orNull)
+  case class RequestError(error: String, cause: Option[Throwable]=None) extends DNWGApiError(error, cause)
+  case class JSONError(error: String, cause: Option[Throwable]=None)   extends DNWGApiError(error, cause)
 
   // Config for the API
   case class Config(token: String, readTimeout: Duration)
@@ -60,7 +67,7 @@ object DNWGApi {
         .fromTry(
           Try(parse(json).extract[T])
         )
-        .mapError(e => JSONError(e.getMessage))
+        .mapError(e => JSONError("Error while parsing json", Some(e)))
 
     // Send the sttp request. It requires Logging to be in the env. Returns either a DNWGApiError or an object of type T
     private def send[T: Manifest](request: Request[Either[String, String], Any]): ZIO[Logging, DNWGApiError, T] =
@@ -87,7 +94,7 @@ object DNWGApi {
     private def apiRequestErrorJson(content: String): DNWGApiError =
       Try(parse(content).extract[ApiErrorMessage])
         .fold(
-          _ => RequestError(content),
+          e => RequestError("Can't parse error json", Some(e)),
           errorMessage => RequestError(errorMessage.error)
         )
 
