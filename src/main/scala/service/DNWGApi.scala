@@ -16,15 +16,15 @@ object DNWGApi {
 
   // This is the service definition. All Services (live, mock, etc) need to implement these methods
   trait Service {
-    def getAllRequest(fromDate: LocalDate, toDate: LocalDate): ZIO[Logging, DNWGApiError, List[MeteringPointData]]
-    def getMeteringPoints: ZIO[Logging, DNWGApiError, List[MeteringPoint]]
+    def getAllMeteringPointData(fromDate: LocalDate, toDate: LocalDate): ZIO[Logging, DNWGApiError, Iterable[MeteringPointData]]
+    def getMeteringPoints: ZIO[Logging, DNWGApiError, Iterable[MeteringPoint]]
   }
 
   // accessors (to make live easier)
-  def getAllRequest(fromDate: LocalDate, toDate: LocalDate): ZIO[Has[DNWGApi.Service] with Logging, DNWGApiError, List[MeteringPointData]] =
-    ZIO.accessM(_.get.getAllRequest(fromDate, toDate))
+  def getAllMeteringPointData(fromDate: LocalDate, toDate: LocalDate): ZIO[Has[DNWGApi.Service] with Logging, DNWGApiError, Iterable[MeteringPointData]] =
+    ZIO.accessM(_.get.getAllMeteringPointData(fromDate, toDate))
 
-  def getMeteringPoints: ZIO[Has[DNWGApi.Service] with Logging, DNWGApiError, List[MeteringPoint]] =
+  def getMeteringPoints: ZIO[Has[DNWGApi.Service] with Logging, DNWGApiError, Iterable[MeteringPoint]] =
     ZIO.accessM(_.get.getMeteringPoints)
 
   // This is the live Service definition. To create the service we need Config, A SttpClient. The service always succeeds
@@ -35,9 +35,9 @@ object DNWGApi {
     }
 
   // Possible errors
-  sealed abstract class DNWGApiError(error: String, cause: Option[Throwable]=None) extends Exception(error, cause.orNull)
-  case class RequestError(error: String, cause: Option[Throwable]=None) extends DNWGApiError(error, cause)
-  case class JSONError(error: String, cause: Option[Throwable]=None)   extends DNWGApiError(error, cause)
+  sealed abstract class DNWGApiError(error: String, cause: Option[Throwable] = None) extends Exception(error, cause.orNull)
+  case class RequestError(error: String, cause: Option[Throwable] = None)            extends DNWGApiError(error, cause)
+  case class JSONError(error: String, cause: Option[Throwable] = None)               extends DNWGApiError(error, cause)
 
   // Config for the API
   case class Config(token: String, readTimeout: Duration)
@@ -63,11 +63,9 @@ object DNWGApi {
 
     // Parse the json to the final class (manifest is needed, since this is a generic implementation)
     private def parseJson[T: Manifest](json: String): IO[JSONError, T] =
-      ZIO
-        .fromTry(
-          Try(parse(json).extract[T])
-        )
-        .mapError(e => JSONError("Error while parsing json", Some(e)))
+      ZIO(
+        parse(json).extract[T]
+      ).mapError(e => JSONError("Error while parsing json", Some(e)))
 
     // Send the sttp request. It requires Logging to be in the env. Returns either a DNWGApiError or an object of type T
     private def send[T: Manifest](request: Request[Either[String, String], Any]): ZIO[Logging, DNWGApiError, T] =
@@ -99,7 +97,7 @@ object DNWGApi {
         )
 
     // Implements the service method. Needs Logging, returns DNWGApiError or a List[MeteringPoint]
-    override def getMeteringPoints: ZIO[Logging, DNWGApiError, List[MeteringPoint]] = {
+    override def getMeteringPoints: ZIO[Logging, DNWGApiError, Iterable[MeteringPoint]] = {
       val request = baseGet
         .get(uri"""$host/api/v1/meteringPoints""")
 
@@ -108,7 +106,7 @@ object DNWGApi {
     }
 
     // Implements the service method. Needs Logging, returns DNWGApiError or a List[MeteringPointData]
-    override def getAllRequest(fromDate: LocalDate, toDate: LocalDate): ZIO[Logging, DNWGApiError, List[MeteringPointData]] = {
+    override def getAllMeteringPointData(fromDate: LocalDate, toDate: LocalDate): ZIO[Logging, DNWGApiError, Iterable[MeteringPointData]] = {
       val request = baseGet
         .get(
           uri"""$host/api/v1/meteringPoints/all/meteringdata/interval?periodStartdate=$fromDate&periodEnddate=$toDate&extendedData=registerreading"""

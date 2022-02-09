@@ -1,52 +1,96 @@
-import service.{AppConfig, AppLogging, DNWGApi, Offset}
+import model.DNWGResponse.{MeteringPoint, MeteringPointData}
+import service._
 import sttp.client3.httpclient.zio._
 import zio._
+import zio.blocking.Blocking
 import zio.config.syntax._
+import zio.kafka.producer.TransactionalProducer
 import zio.logging._
+import zio.stream.ZStream
 
 import scala.language.postfixOps
 
 object Main extends App {
 
-
   // Define env
   private val loggingLayer = AppLogging.defautLayer
 
   private val offsetConfig = AppConfig.live.narrow(_.offset)
-  private val offsetLayer = offsetConfig >>> Offset.live // feed config into offset.live
+  private val offsetLayer  = offsetConfig >>> Offset.live // feed config into offset.live
 
-  private val dnwgApiConfig =  AppConfig.live.narrow(_.dnwgApi)
-  private val dnwgApiLayer = (dnwgApiConfig ++ HttpClientZioBackend.managed().toLayer) >>> DNWGApi.live // feed config + http client into api.live
+  private val dnwgApiConfig = AppConfig.live.narrow(_.dnwgApi)
+  private val dnwgApiLayer  = (dnwgApiConfig ++ HttpClientZioBackend.managed().toLayer) >>> DNWGApi.live // feed config + http client into api.live
 
-  // put these in config
+  private val kafkaProducerConfig = AppConfig.live.narrow(_.kafka)
+  private val kafkaProducerLayer  = (kafkaProducerConfig ++ Blocking.live) >>> Kafka.live
+
+  // Get all metering point data
+  val getMeteringPointData: ZIO[Has[Offset.Service] with Has[DNWGApi.Service] with Logging, Throwable, Iterable[MeteringPointData]] = for {
+    _                 <- log.debug("Getting MeteringPointData")
+    fromDate          <- Offset.getStartOffset
+    toDate            <- Offset.getEndOffset(fromDate)
+    meteringPointData <- DNWGApi.getAllMeteringPointData(fromDate, toDate)
+    _                 <- Offset.setNextOffset(toDate)
+    _                 <- log.debug("Data: " + meteringPointData.size)
+  } yield meteringPointData
+
+  // convert metering point data to a stream
+  val getMeteringPointDataStream: ZStream[Has[Offset.Service] with Has[DNWGApi.Service] with Logging, Throwable, MeteringPointData] =
+    ZStream.fromIteratorEffect(getMeteringPointData.map(_.iterator))
+
+  // Get all metering points
+  val getMeteringPoints: ZIO[Has[DNWGApi.Service] with Logging, Throwable, Iterable[MeteringPoint]] = for {
+    _              <- log.debug("Getting MeteringPoints")
+    meteringPoints <- DNWGApi.getMeteringPoints
+    _              <- log.debug("Points: " + meteringPoints.size)
+  } yield meteringPoints
+
+  // convert metering points to a stream
+//  val getMeteringPointsStream: ZStream[Has[DNWGApi.Service] with Logging, Throwable, MeteringPoint] =
+//    ZStream.fromIteratorEffect(getMeteringPoints.map(_.iterator))
+
+//  def sendMessages[T](
+//    stream: ZStream[Has[Kafka.Service] with Has[TransactionalProducer] with Logging, Throwable, T]
+//  ): ZManaged[Has[Kafka.Service] with Has[Transaction] with Logging, Throwable, Unit] = for {
+//    _ <- TransactionalProducer.createTransaction
+//
+//    _ <- stream
+//           .mapM(item => Kafka.createRecord(item))
+//           .mapChunksM(Kafka.produceRecordChunk)
+//           .runDrain
+//           .toManaged_
+//  } yield ()
+
+  // actual program
+  val program: ZIO[Has[Kafka.Service] with Has[TransactionalProducer] with Has[Offset.Service] with Has[DNWGApi.Service] with Logging, Throwable, Unit] = {
+
+    ( ZStream
+      .fromIteratorEffect(getMeteringPointData.map(_.iterator))
+              .mapM(item => Kafka.createRecord(item))
+              .mapChunksM(Kafka.produceRecordChunk)
+              .runDrain)
+      .provideSomeLayer(Kafka.createTransactionLayer)
+
+
+  }
+
+  // run
   override def run(args: List[String]): URIO[zio.ZEnv, ExitCode] = {
-    (for {
-      _ <- log.debug("Starting App")
-      fromDate <- Offset.getOffset
-      ff <- DNWGApi.getMeteringPoints
-      _ <- Offset.setOffset(fromDate)
-      _ <- log.debug("Points: " +ff.size)
-    } yield ())
+    program
       .foldM(
-              error =>
-                log
-                  .error("Error: " + error)
-                  .as(ExitCode(1)),
-              _ =>
-                log
-                  .info("Success")
-                  .as(ExitCode(0))
-            )
-      .provideCustomLayer(loggingLayer ++ offsetLayer ++ dnwgApiLayer)
+        error =>
+          log
+            .error("Error: " + error + error.printStackTrace())
+            .as(ExitCode(1)),
+        _ =>
+          log
+            .info("Success")
+            .as(ExitCode(0))
+      )
+      .provideCustomLayer(loggingLayer ++ offsetLayer ++ dnwgApiLayer ++ kafkaProducerLayer)
       .exitCode
   }
 
-//
-//  private val sourceName         = "DNWG/all"
-//  private val logLevel           = LogLevel.Debug
-//  private val dnwgHost           = "https://emi.dnwg.nl"
-//  private val dnwgApiToken       = "b043adab-a6fb-491e-ba45-b2fa54c30409"
-//  private val dnwgApiReadTimeout = 1 minutes
 //  private val dnwgHeaders = Map(
 //    "ce_specversion" -> "1.0",
 //    "ce_type"        -> "nl.schiphol.dna.cdf.model.DNWGMeterPointRaw",
@@ -153,6 +197,9 @@ object Main extends App {
 //                        .mapError(wrapException("Extracting json body failed"))
 //    _ <- log.debug(s"Received ${meteringPoints.size} items from endpoint")
 //  } yield meteringPoints
+
+
+
 //
 //  val program = for {
 //    meteringPoints <- getMeteringPoints

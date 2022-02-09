@@ -3,15 +3,15 @@ package model
 import java.time.{Instant, LocalDate}
 
 object DNWGResponse {
-  case class RawAll(apiVersion: Int, method: String, data: RawData[MeteringPointData])
-  case class RawMeteringPoints(apiVersion: Int, method: String, data: RawData[MeteringPoint])
+  case class RawAll(apiVersion: String, method: String, data: RawData[MeteringPointData])
+  case class RawMeteringPoints(apiVersion: String, method: String, data: RawData[MeteringPoint])
 
   case class RawData[+T](items: List[T])
 
   case class Discipline(id: String, description: String)
   case class MeteringPointType(id: String, description: String)
 
-  case class ChannelData(channelID: String, meteringData: List[Measurement], description: String, direction: String)
+  case class ChannelData(channelID: String, meteringData: List[Measurement], description: Option[String], direction: Option[String])
   case class Measurement(
     value: Double,
     registerreading: Option[Int],

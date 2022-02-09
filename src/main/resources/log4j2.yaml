@@ -1,0 +1,12 @@
+Configuration:
+  appenders:
+    Console:
+      name: stdout
+      PatternLayout:
+        Pattern: "[%level] %date{ISO8601} %logger{5} %thread %message\n"
+
+  Loggers:
+    asyncRoot:
+      level: info
+      AppenderRef:
+        - ref: stdout

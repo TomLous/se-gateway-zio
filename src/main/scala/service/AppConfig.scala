@@ -13,7 +13,8 @@ case class AppConfig(
   name: String,
   logLevel: LogLevel,
   dnwgApi: DNWGApi.Config,
-  offset: Offset.Config
+  offset: Offset.Config,
+  kafka: Kafka.Config
 )
 
 object AppConfig {
