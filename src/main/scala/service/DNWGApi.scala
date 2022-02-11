@@ -56,17 +56,15 @@ object DNWGApi {
     // Send the sttp request. It requires Logging to be in the env. Returns either a DNWGApiError or an object of type T
     private def send[T: Manifest](request: Request[Either[String, String], Any]): ZIO[Logging, DNWGApiError, T] =
       for {
-        _ <- log.debug(s"Calling endpoint ${request.uri.toString()}")
+        _ <- log.debug(s"action=api-request uri=${request.uri.toString()}")
         response <- backend
                       .send(request)
                       .orDie
-        _ <- log.debug(s"Success: ${response.code.isSuccess}")
         body <- ZIO
                   .fromEither(response.body)
                   .foldM(apiRequestErrorJson, e => ZIO.succeed(e))
-        _    <- log.debug(s"Byte length: ${body.length}")
-        json <- Json.parseJson[T](body).mapError(e => RequestError("Error parsing response Json", Some(e)))
-        _    <- log.debug(s"Content decoded")
+        _    <- log.debug(s"action=api-request response-length=${body.length}")
+        json <- Json.parseJson[T](body).mapError(e => RequestError("action=api-request type=json-parse message='Error parsing response Json'", Some(e)))
       } yield json
 
     // Basic get request config

@@ -14,7 +14,7 @@ object AppLogging {
     hasLogger <- Logging.console(
                    logLevel = hasConfig.get.logLevel,
                    format = LogFormat.ColoredLogFormat()
-                 ) >>> Logging.withRootLoggerName(hasConfig.get.name)
+                 ) >>> Logging.withRootLoggerName(s"app=${hasConfig.get.name}")
   } yield hasLogger
 
 
