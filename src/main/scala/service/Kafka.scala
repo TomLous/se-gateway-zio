@@ -3,10 +3,12 @@ package service
 import org.apache.kafka.clients.producer.{ProducerRecord, RecordMetadata}
 import org.apache.kafka.common.header.Header
 import org.apache.kafka.common.header.internals.RecordHeader
+import util.Json
 import zio._
 import zio.blocking.Blocking
 import zio.kafka.producer.{ProducerSettings, Transaction, TransactionalProducer, TransactionalProducerSettings}
 import zio.kafka.serde.Serde
+import zio.logging.Logging
 
 import java.lang
 import java.nio.charset.StandardCharsets
@@ -15,26 +17,37 @@ import scala.jdk.CollectionConverters._
 
 object Kafka {
 
+  case class Record[T: Manifest](item: T,
+                                 headers: Map[String, String] = Map.empty,
+                                 key: Option[String] = None,
+                                 partition: Option[Int] = None,
+                                 timestamp: Option[LocalDateTime] = None)
+
+
+
+
   // This is the service definition. All Services (live, mock, etc) need to implement these methods
   trait Service {
-    def createRecord[T](
+    def createRecord[T: Manifest](
       item: T,
       headers: Map[String, String] = Map.empty,
       key: Option[String] = None,
       partition: Option[Int] = None,
       timestamp: Option[LocalDateTime] = None
-    ): ZIO[Any, Throwable, ProducerRecord[String, String]]
+    ): ZIO[Logging, Throwable, ProducerRecord[String, String]]
 
     def produceRecordChunk(chunk: Chunk[ProducerRecord[String, String]]): ZIO[Has[Transaction], Throwable, Chunk[RecordMetadata]]
   }
 
-  def createRecord[T](
+
+
+  def createRecord[T: Manifest](
     item: T,
     headers: Map[String, String] = Map.empty,
-    key: Option[String] = None,
+    key: Option[String] = None)(
     partition: Option[Int] = None,
     timestamp: Option[LocalDateTime] = None
-  ): ZIO[Has[Kafka.Service], Throwable, ProducerRecord[String, String]] =
+  ): ZIO[Has[Kafka.Service] with Logging, Throwable, ProducerRecord[String, String]] =
     ZIO.accessM(_.get.createRecord(item, headers, key, partition, timestamp))
 
   def produceRecordChunk(
@@ -68,6 +81,8 @@ object Kafka {
 
   case class KafkaProducerServiceLive(config: Kafka.Config) extends Kafka.Service {
 
+
+
     private def getRecordHeaders(headers: Map[String, String]): Task[lang.Iterable[Header]] = ZIO(headers.map { case (k, v) =>
       new RecordHeader(k, v.getBytes(StandardCharsets.UTF_8)).asInstanceOf[Header]
     }.asJava)
@@ -92,24 +107,21 @@ object Kafka {
         .map(l => l: java.lang.String)
     )
 
-    private def getJson[T](item: T): Task[java.lang.String] = {
-      ???
-    }
 
-    override def createRecord[T](
+    override def createRecord[T: Manifest](
       item: T,
       headers: Map[String, String] = Map.empty,
       key: Option[String] = None,
       partition: Option[Int] = None,
       timestamp: Option[LocalDateTime] = None
-    ): ZIO[Any, Throwable, ProducerRecord[String, String]] = {
+    ): ZIO[Logging, Throwable, ProducerRecord[String, String]] = {
 
       for {
         recordHeaders <- getRecordHeaders(headers)
         partitionSafe <- getPartition(partition)
         timestampSafe <- getUnixTime(timestamp)
         keySafe       <- getKey(key)
-        json          <- getJson(item)
+        json          <- Json.renderJson(item)
         record <- ZIO(
                     new ProducerRecord[String, String](config.topic, partitionSafe.orNull, timestampSafe.orNull, keySafe.orNull, json, recordHeaders)
                   )

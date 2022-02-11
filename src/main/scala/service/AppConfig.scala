@@ -28,5 +28,9 @@ object AppConfig {
       config    <- ZIO.fromEither(read(descriptor.from(source)))
     } yield config).toLayer.orDie
 
+  def name: ZIO[Has[AppConfig], Throwable, String] =
+    ZIO.accessM(cfg => ZIO.succeed(cfg.get.name))
+
+
 
 }

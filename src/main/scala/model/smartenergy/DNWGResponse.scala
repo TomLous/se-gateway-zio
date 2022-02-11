@@ -1,4 +1,6 @@
-package model
+package model.smartenergy
+
+import model.InternalSchemaRecord
 
 import java.time.{Instant, LocalDate}
 
@@ -40,11 +42,11 @@ object DNWGResponse {
     meteringDataAvailableTill: Option[LocalDate],
     location: Location,
     channels: List[Channel]
-  )
+  ) extends InternalSchemaRecord(_key = Some(meteringPointID), _version = 1)
 
   case class MeteringPointData(
     meteringPointID: String,
     channels: List[ChannelData]
-  )
+  ) extends InternalSchemaRecord(_key = Some(meteringPointID), _version = 3)
 
 }

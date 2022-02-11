@@ -1,16 +1,14 @@
 package service
 
-import model.DNWGResponse._
-import org.json4s._
-import org.json4s.native.JsonMethods._
+import model.smartenergy.DNWGResponse._
 import sttp.client3._
 import sttp.client3.httpclient.zio.SttpClient
+import util.Json
 import zio._
 import zio.duration._
 import zio.logging.{Logging, log}
 
 import java.time.LocalDate
-import scala.util.Try
 
 object DNWGApi {
 
@@ -37,7 +35,6 @@ object DNWGApi {
   // Possible errors
   sealed abstract class DNWGApiError(error: String, cause: Option[Throwable] = None) extends Exception(error, cause.orNull)
   case class RequestError(error: String, cause: Option[Throwable] = None)            extends DNWGApiError(error, cause)
-  case class JSONError(error: String, cause: Option[Throwable] = None)               extends DNWGApiError(error, cause)
 
   // Config for the API
   case class Config(token: String, readTimeout: Duration)
@@ -49,23 +46,12 @@ object DNWGApi {
   case class DNWGApiServiceLive(config: DNWGApi.Config, backend: SttpClient.Service) extends DNWGApi.Service {
     val host = "https://emi.dnwg.nl"
 
-    // Needed for the json parsing (maybe move to helper class if reused)
-    private object LocalDateSerializer
-        extends CustomSerializer[LocalDate](_ =>
-          (
-            { case JString(date) => LocalDate.parse(date) },
-            { case date: LocalDate => JString(date.toString) }
-          )
-        )
 
-    // json4s loves implicits
-    implicit val formats: Formats = DefaultFormats + LocalDateSerializer
+
+
 
     // Parse the json to the final class (manifest is needed, since this is a generic implementation)
-    private def parseJson[T: Manifest](json: String): IO[JSONError, T] =
-      ZIO(
-        parse(json).extract[T]
-      ).mapError(e => JSONError("Error while parsing json", Some(e)))
+
 
     // Send the sttp request. It requires Logging to be in the env. Returns either a DNWGApiError or an object of type T
     private def send[T: Manifest](request: Request[Either[String, String], Any]): ZIO[Logging, DNWGApiError, T] =
@@ -77,9 +63,9 @@ object DNWGApi {
         _ <- log.debug(s"Success: ${response.code.isSuccess}")
         body <- ZIO
                   .fromEither(response.body)
-                  .mapError(apiRequestErrorJson)
+                  .foldM(apiRequestErrorJson, e => ZIO.succeed(e))
         _    <- log.debug(s"Byte length: ${body.length}")
-        json <- parseJson[T](body)
+        json <- Json.parseJson[T](body).mapError(e => RequestError("Error parsing response Json", Some(e)))
         _    <- log.debug(s"Content decoded")
       } yield json
 
@@ -89,12 +75,11 @@ object DNWGApi {
       .readTimeout(config.readTimeout.asScala)
 
     // either get the json error message, or else just the plain error
-    private def apiRequestErrorJson(content: String): DNWGApiError =
-      Try(parse(content).extract[ApiErrorMessage])
-        .fold(
-          e => RequestError("Can't parse error json", Some(e)),
-          errorMessage => RequestError(errorMessage.error)
-        )
+    private def apiRequestErrorJson(content: String): ZIO[Any, DNWGApiError, Nothing] =
+      Json.parseJson[ApiErrorMessage](content).foldM(
+        parseFail => ZIO.fail(RequestError(content, Some(parseFail))),
+        errorMessage => ZIO.fail(RequestError(errorMessage.error))
+      )
 
     // Implements the service method. Needs Logging, returns DNWGApiError or a List[MeteringPoint]
     override def getMeteringPoints: ZIO[Logging, DNWGApiError, Iterable[MeteringPoint]] = {

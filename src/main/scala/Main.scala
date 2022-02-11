@@ -1,8 +1,9 @@
-import model.DNWGResponse.{MeteringPoint, MeteringPointData}
+import model.smartenergy.DNWGResponse.{MeteringPoint, MeteringPointData}
 import service._
 import sttp.client3.httpclient.zio._
 import zio._
 import zio.blocking.Blocking
+import zio.clock.Clock
 import zio.config.syntax._
 import zio.kafka.producer.TransactionalProducer
 import zio.logging._
@@ -34,10 +35,6 @@ object Main extends App {
     _                 <- log.debug("Data: " + meteringPointData.size)
   } yield meteringPointData
 
-  // convert metering point data to a stream
-  val getMeteringPointDataStream: ZStream[Has[Offset.Service] with Has[DNWGApi.Service] with Logging, Throwable, MeteringPointData] =
-    ZStream.fromIteratorEffect(getMeteringPointData.map(_.iterator))
-
   // Get all metering points
   val getMeteringPoints: ZIO[Has[DNWGApi.Service] with Logging, Throwable, Iterable[MeteringPoint]] = for {
     _              <- log.debug("Getting MeteringPoints")
@@ -45,32 +42,35 @@ object Main extends App {
     _              <- log.debug("Points: " + meteringPoints.size)
   } yield meteringPoints
 
-  // convert metering points to a stream
-//  val getMeteringPointsStream: ZStream[Has[DNWGApi.Service] with Logging, Throwable, MeteringPoint] =
-//    ZStream.fromIteratorEffect(getMeteringPoints.map(_.iterator))
-
-//  def sendMessages[T](
-//    stream: ZStream[Has[Kafka.Service] with Has[TransactionalProducer] with Logging, Throwable, T]
-//  ): ZManaged[Has[Kafka.Service] with Has[Transaction] with Logging, Throwable, Unit] = for {
-//    _ <- TransactionalProducer.createTransaction
+//  def sendToKafka[A](effect: ZIO[Has[Kafka.Service] with Has[TransactionalProducer] with Logging, Throwable, Iterable[A]]) = {
+//    ZStream
+//      .fromIteratorEffect(effect)
+//      .mapM(item => Kafka.createRecord(item)())
+//      .mapChunksM(Kafka.produceRecordChunk)
+//      .runDrain
+//      .provideSomeLayer[Has[Kafka.Service] with Has[TransactionalProducer] with Logging](Kafka.createTransactionLayer)
 //
-//    _ <- stream
-//           .mapM(item => Kafka.createRecord(item))
-//           .mapChunksM(Kafka.produceRecordChunk)
-//           .runDrain
-//           .toManaged_
-//  } yield ()
+//  }
 
   // actual program
-  val program: ZIO[Has[Kafka.Service] with Has[TransactionalProducer] with Has[Offset.Service] with Has[DNWGApi.Service] with Logging, Throwable, Unit] = {
-
-    ( ZStream
-      .fromIteratorEffect(getMeteringPointData.map(_.iterator))
-              .mapM(item => Kafka.createRecord(item))
-              .mapChunksM(Kafka.produceRecordChunk)
-              .runDrain)
-      .provideSomeLayer(Kafka.createTransactionLayer)
-
+  val program
+    : ZIO[Has[AppConfig] with Has[Kafka.Service] with Has[TransactionalProducer] with Has[Offset.Service] with Has[DNWGApi.Service] with Logging with Clock, Throwable, Unit] = {
+    (for {
+      config <- ZIO.service[AppConfig]
+      clock <- ZIO.service[Clock.Service]
+      ingestedAt <- clock.instant
+      data <- getMeteringPointData
+      _ <- log.debug("Start streaming to Kafka")
+      _ <- ZStream
+             .fromIterable(data)
+             .mapM(item => Kafka.createRecord(item, item._headers(config.name, ingestedAt), item._key)())
+             .mapChunksM(Kafka.produceRecordChunk)
+             .runDrain
+      _ <- log.debug("Wrote records to Kafka")
+    } yield ())
+      .provideSomeLayer[Has[AppConfig] with Has[Kafka.Service] with Has[TransactionalProducer] with Has[Offset.Service] with Has[DNWGApi.Service] with Logging with Clock](
+        Kafka.createTransactionLayer
+      )
 
   }
 
@@ -87,7 +87,7 @@ object Main extends App {
             .info("Success")
             .as(ExitCode(0))
       )
-      .provideCustomLayer(loggingLayer ++ offsetLayer ++ dnwgApiLayer ++ kafkaProducerLayer)
+      .provideCustomLayer(AppConfig.live ++ loggingLayer ++ offsetLayer ++ dnwgApiLayer ++ kafkaProducerLayer)
       .exitCode
   }
 
@@ -197,8 +197,6 @@ object Main extends App {
 //                        .mapError(wrapException("Extracting json body failed"))
 //    _ <- log.debug(s"Received ${meteringPoints.size} items from endpoint")
 //  } yield meteringPoints
-
-
 
 //
 //  val program = for {
