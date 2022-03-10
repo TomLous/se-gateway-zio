@@ -1,8 +1,8 @@
-package util
+package cdf.util
 
-import org.json4s.native.JsonMethods._
-import org.json4s.native.Serialization.write
 import org.json4s._
+import org.json4s.native.JsonMethods._
+import org.json4s.native.Serialization._
 import zio.ZIO
 
 import java.time.LocalDate

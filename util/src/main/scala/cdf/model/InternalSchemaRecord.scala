@@ -1,4 +1,4 @@
-package model
+package cdf.model
 
 import java.time.Instant
 

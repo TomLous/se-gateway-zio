@@ -1,6 +1,6 @@
-package model.smartenergy
+package smartenergy
 
-import model.InternalSchemaRecord
+import cdf.model.InternalSchemaRecord
 
 import java.time.{Instant, LocalDate}
 
@@ -13,7 +13,12 @@ object DNWGResponse {
   case class Discipline(id: String, description: String)
   case class MeteringPointType(id: String, description: String)
 
-  case class ChannelData(channelID: String, meteringData: List[Measurement], description: Option[String], direction: Option[String])
+  case class ChannelData(
+    channelID: String,
+    meteringData: List[Measurement],
+    description: Option[String],
+    direction: Option[String]
+  )
   case class Measurement(
     value: Double,
     registerreading: Option[Int],
