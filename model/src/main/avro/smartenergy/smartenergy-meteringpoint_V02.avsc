@@ -1,0 +1,103 @@
+{
+  "type" : "record",
+  "name" : "meteringpoint",
+  "namespace" : "smartenergy",
+  "cdpName": "smartenergy-meteringpoint",
+  "cdpVersion": 2,
+  "fields" : [ {
+    "name" : "msg_id",
+    "type" : "string"
+  }, {
+    "name" : "metering_point_id",
+    "type" : "string"
+  }, {
+    "name" : "meter_field_number",
+    "type" : [ "null", "string" ],
+    "default" : null
+  }, {
+    "name" : "meter_sequence_number",
+    "type" : [ "null", "string" ],
+    "default" : null
+  }, {
+    "name" : "ean",
+    "type" : [ "null", "string" ],
+    "default" : null
+  }, {
+    "name" : "ean_country_code",
+    "type" : [ "null", "string" ],
+    "default" : null
+  }, {
+    "name" : "ean_company_code",
+    "type" : [ "null", "string" ],
+    "default" : null
+  }, {
+    "name" : "ean_sequence_number",
+    "type" : [ "null", "string" ],
+    "default" : null
+  }, {
+    "name" : "ean_check_number",
+    "type" : [ "null", "string" ],
+    "default" : null
+  }, {
+    "name" : "ean_location_code",
+    "type" : [ "null", "string" ],
+    "default" : null
+  }, {
+    "name" : "discipline",
+    "type" : [ "null", "string" ],
+    "default" : null
+  }, {
+    "name" : "discipline_description",
+    "type" : [ "null", "string" ],
+    "default" : null
+  }, {
+    "name" : "metering_point_type",
+    "type" : [ "null", "string" ],
+    "default" : null
+  }, {
+    "name" : "metering_point_type_description",
+    "type" : [ "null", "string" ],
+    "default" : null
+  }, {
+    "name" : "name",
+    "type" : [ "null", "string" ],
+    "default" : null
+  }, {
+    "name" : "metering_data_available_from",
+    "type" : [ "null", {
+      "type" : "long",
+      "logicalType" : "timestamp-millis"
+    } ],
+    "default" : null
+  }, {
+    "name" : "metering_data_available_till",
+    "type" : [ "null", {
+      "type" : "long",
+      "logicalType" : "timestamp-millis"
+    } ],
+    "default" : null
+  }, {
+    "name" : "location_id",
+    "type" : [ "null", "string" ],
+    "default" : null
+  }, {
+    "name" : "channels",
+    "type" : "string"
+  }, {
+    "name" : "meter_virtual_physical",
+    "type" : "string"
+  }, {
+    "name" : "related_metering_point_id",
+    "type" : [ "null", "string" ],
+    "default" : null
+  }, {
+    "name" : "source",
+    "type" : "string"
+  }, {
+    "name" : "last_updated",
+    "type" : {
+      "type" : "long",
+      "logicalType" : "timestamp-millis"
+    }
+  } ]
+}

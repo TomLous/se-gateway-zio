@@ -17,6 +17,11 @@ object dnwg {
       toDate: LocalDate
     ): ZIO[Any, DNWGApiError, Iterable[MeteringPointData]]
     def getMeteringPoints: ZIO[Any, DNWGApiError, Iterable[MeteringPoint]]
+    def getMeteringPointData(
+      id: String,
+      fromDate: LocalDate,
+      optToDate: Option[LocalDate] = None
+    ): ZIO[Any, DNWGApiError, Iterable[ChannelData]]
   }
 
   object DNWGApi {
@@ -30,8 +35,14 @@ object dnwg {
 
     def getMeteringPoints: ZIO[DNWGApi, DNWGApiError, Iterable[MeteringPoint]] =
       ZIO.serviceWithZIO(_.getMeteringPoints)
-  }
 
+    def getMeteringPointData(
+      id: String,
+      fromDate: LocalDate,
+      optToDate: Option[LocalDate] = None
+    ): ZIO[DNWGApi, DNWGApiError, Iterable[ChannelData]] =
+      ZIO.serviceWithZIO(_.getMeteringPointData(id, fromDate, optToDate))
+  }
 
   // Possible errors
   sealed abstract class DNWGApiError(error: String, cause: Option[Throwable] = None)
@@ -63,18 +74,18 @@ object dnwg {
         for {
           _ <- ZIO.logDebug(s"action=api-request uri=${request.uri.toString()}")
           response <- backend
-            .send(request)
-            .orDie
+                        .send(request)
+                        .orDie
           body <- ZIO
-            .fromEither(response.body)
-            .foldZIO(apiRequestErrorJson, e => ZIO.succeed(e))
+                    .fromEither(response.body)
+                    .foldZIO(apiRequestErrorJson, e => ZIO.succeed(e))
           _ <- ZIO.logDebug(s"action=api-request response-length=${body.length}")
           _ <- ZIO.logDebug(s"action=api-request response-length=${body}")
           json <- Json
-            .parseJson[T](body)
-            .mapError(e =>
-              RequestError("action=api-request type=json-parse message='Error parsing response Json'", Some(e))
-            )
+                    .parseJson[T](body)
+                    .mapError(e =>
+                      RequestError("action=api-request type=json-parse message='Error parsing response Json'", Some(e))
+                    )
         } yield json
       }
 
@@ -93,8 +104,8 @@ object dnwg {
             .parseJson[ApiErrorMessageAlternative](content)
             .map(_.error.message)
         )
-        .foldZIO(parseFail=>
-          ZIO.fail(RequestError(content, Some(parseFail))),
+        .foldZIO(
+          parseFail => ZIO.fail(RequestError(content, Some(parseFail))),
           errorMessage => ZIO.fail(RequestError(errorMessage))
         )
 
@@ -121,6 +132,19 @@ object dnwg {
         .map(_.data.items)
     }
 
+    override def getMeteringPointData(
+      id: String,
+      fromDate: LocalDate,
+      optToDate: Option[LocalDate]
+    ): ZIO[Any, DNWGApiError, Iterable[ChannelData]] = {
+      val request = baseGet
+        .get(
+          uri"""$host/api/v1/meteringPoints/$id/meteringdata/interval?periodStartdate=$fromDate&periodEnddate=$optToDate&extendedData=registerreading"""
+        )
+
+      send[RawMeteringPointData](request)
+        .map(_.data.items)
+    }
   }
 
 }

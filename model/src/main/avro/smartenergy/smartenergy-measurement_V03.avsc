@@ -1,0 +1,76 @@
+{
+  "type" : "record",
+  "name" : "measurement",
+  "namespace" : "smartenergy",
+  "cdpName": "smartenergy-measurement",
+  "cdpVersion": 3,
+  "fields" : [ {
+    "name" : "msg_id",
+    "type" : "string"
+  }, {
+    "name" : "metering_point_id",
+    "type" : "string"
+  }, {
+    "name" : "channel_id",
+    "type" : "string"
+  }, {
+    "name" : "timestamp_ms",
+    "type" : "long"
+  }, {
+    "name" : "timestamp",
+    "type" : {
+      "type" : "long",
+      "logicalType" : "timestamp-millis"
+    }
+  }, {
+    "name" : "value",
+    "type" : {
+      "type" : "bytes",
+      "logicalType" : "decimal",
+      "precision" : 38,
+      "scale" : 18
+    }
+  }, {
+    "name" : "register_reading",
+    "type" : [ "null", {
+      "type" : "bytes",
+      "logicalType" : "decimal",
+      "precision" : 38,
+      "scale" : 18
+    } ],
+    "default" : null
+  }, {
+    "name" : "period_covered_ms",
+    "type" : [ "null", "long" ],
+    "default" : null
+  }, {
+    "name" : "is_quality_disturbed",
+    "type" : [ "null", "boolean" ],
+    "default" : null
+  }, {
+    "name" : "is_metering_disturbed",
+    "type" : [ "null", "boolean" ],
+    "default" : null
+  }, {
+    "name" : "is_accurate",
+    "type" : [ "null", "boolean" ],
+    "default" : null
+  }, {
+    "name" : "is_corrected",
+    "type" : [ "null", "boolean" ],
+    "default" : null
+  }, {
+    "name" : "is_estimated",
+    "type" : [ "null", "boolean" ],
+    "default" : null
+  }, {
+    "name" : "source",
+    "type" : "string"
+  }, {
+    "name" : "last_updated",
+    "type" : {
+      "type" : "long",
+      "logicalType" : "timestamp-millis"
+    }
+  } ]
+}

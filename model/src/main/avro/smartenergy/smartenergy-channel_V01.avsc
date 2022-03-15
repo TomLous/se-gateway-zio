@@ -1,0 +1,37 @@
+{
+  "type" : "record",
+  "name" : "channel",
+  "namespace" : "smartenergy",
+  "cdpName": "smartenergy-channel",
+  "cdpVersion": 1,
+  "fields" : [ {
+    "name" : "msg_id",
+    "type" : "string"
+  }, {
+    "name" : "channel_id",
+    "type" : "string"
+  }, {
+    "name" : "unit",
+    "type" : [ "null", "string" ],
+    "default" : null
+  }, {
+    "name" : "direction",
+    "type" : [ "null", "string" ],
+    "default" : null
+  }, {
+    "name" : "description",
+    "type" : "string"
+  }, {
+    "name" : "channel_type",
+    "type" : "string"
+  }, {
+    "name" : "source",
+    "type" : "string"
+  }, {
+    "name" : "last_updated",
+    "type" : {
+      "type" : "long",
+      "logicalType" : "timestamp-millis"
+    }
+  } ]
+}

@@ -6,3 +6,6 @@ addSbtPlugin("com.github.sbt" % "sbt-release" % "1.1.0")
 
 // Generate scala from build definitions https://github.com/sbt/sbt-buildinfo
 addSbtPlugin("com.eed3si9n" % "sbt-buildinfo"  % "0.10.0")
+
+// Generate scala from avro https://github.com/julianpeeters/sbt-avrohugger#changing-settings
+addSbtPlugin("com.julianpeeters" % "sbt-avrohugger" % "2.0.0")

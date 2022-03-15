@@ -42,12 +42,13 @@ object offset {
     override def getStartOffset: ZIO[Any, OffsetError, LocalDate] =
       for {
         _ <- ZIO.logDebug(s"type=offset-start action=read file=${config.path}")
-        data <- ZIO(Source.fromFile(config.path)(StandardCharsets.UTF_8))
-                  .map(_.mkString)
-                  .tapError(_ =>
-                    ZIO.logWarning(s"type=offset-start message='No offset found, using default: ${config.defaultOffset}'")
-                  )
-                  .fold(_ => config.defaultOffset.toString, offset => offset.trim)
+        data <-
+          ZIO(Source.fromFile(config.path)(StandardCharsets.UTF_8))
+            .map(_.mkString)
+            .tapError(_ =>
+              ZIO.logWarning(s"type=offset-start message='No offset found, using default: ${config.defaultOffset}'")
+            )
+            .fold(_ => config.defaultOffset.toString, offset => offset.trim)
         date <- ZIO(LocalDate.parse(data))
                   .mapError(e => OffsetReadError("type=offset-start message='Failed to read offset'", Some(e)))
         _ <- ZIO.logDebug(s"type=offset-start action=read value=$date")

@@ -22,6 +22,12 @@ lazy val testSettings = Seq(
   Test / testFrameworks += new TestFramework("zio.test.sbt.ZTestFramework")
 )
 
+lazy val avroScalaGeneratorSettings = Seq(
+  Compile / sourceGenerators += (Compile / avroScalaGenerate).taskValue,
+  Test / sourceGenerators += (Test / avroScalaGenerate).taskValue,
+  (Compile / avroScalaSource) := new java.io.File(s"${baseDirectory.value}/src/main/scala")
+)
+
 lazy val root = (project in file("."))
   .aggregate(model, util, services, dnwgGateway)
 
@@ -37,7 +43,10 @@ lazy val util =
 lazy val model =
   project
     .in(file("model"))
-    .settings(commonSettings)
+    .settings(
+      commonSettings,
+      avroScalaGeneratorSettings
+    )
     .dependsOn(util)
 
 

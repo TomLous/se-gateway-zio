@@ -48,11 +48,8 @@ object kafka {
 
     def produceRecordChunk(
       chunk: Chunk[ProducerRecord[String, String]]
-    ): ZIO[Kafka with Transaction, Throwable, Chunk[RecordMetadata]] = for{
-      kafka <- ZIO.service[Kafka]
-      result <- kafka.produceRecordChunk(chunk)
-    } yield result
-//      ZIO.serviceWithZIO(_.produceRecordChunk(chunk))
+    ): ZIO[Kafka with Transaction, Throwable, Chunk[RecordMetadata]] =
+      ZIO.serviceWithZIO[Kafka](_.produceRecordChunk(chunk))
 
     def createTransactionLayer: ZLayer[TransactionalProducer, Throwable, Transaction] =
       for {
