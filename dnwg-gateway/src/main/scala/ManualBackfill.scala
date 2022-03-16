@@ -2,7 +2,6 @@ import cdf.model.InternalSchemaRecord
 import cdf.services.kafka._
 import services._
 import services.dnwg._
-import smartenergy.DNWGResponse._
 import sttp.client3.httpclient.zio.HttpClientZioBackend
 import zio._
 import zio.config.syntax._
@@ -13,9 +12,11 @@ import zio.stream._
 
 object ManualBackfill extends ZIOAppDefault {
 
+  // For the logging => make json logging
   val slf4j: RuntimeConfigAspect         = SLF4J.slf4j(LogLevel.Debug, LogFormat.colored)
   override def hook: RuntimeConfigAspect = slf4j >>> RuntimeConfigAspect.enableCurrentFiber
 
+  // ENV
   type AppEnv = AppConfig with ManualConfig
 
   private val dnwgApiLayer =
@@ -26,34 +27,35 @@ object ManualBackfill extends ZIOAppDefault {
   private val kafkaProducerLayer = AppConfig.live.narrow(_.kafka) >>> KafkaProducerLive.layer
   type KafkaEnv = Kafka with TransactionalProducer with Clock
 
+  // APP
+
   // Get  metering point data for id
-  val getMeteringPointData: ZIO[ApiEnv, Throwable, Iterable[ChannelData]] = for {
-    _      <- ZIO.logDebug("type=MeteringPointData action=start external-source=api")
-    config <- ZIO.service[ManualConfig]
-    meteringPoint <- DNWGApi.getMeteringPoints
-                       .map(_.find(meteringPoint => meteringPoint.meteringPointID == config.meteringPointId))
-    _                 <- ZIO.logDebug(meteringPoint.toString)
+  val getMeteringPointData: ZIO[ApiEnv, Throwable, Iterable[InternalSchemaRecord]] = for {
+    config            <- ZIO.service[ManualConfig]
+    _                 <- ZIO.logDebug(s"type=MeteringPoint action=request external-source=api id=${config.meteringPointId}")
+    meteringPoint     <- DNWGApi.getMeteringPoint(config.meteringPointId)
+    _                 <- ZIO.logDebug(s"type=MeteringPoint action=received external-source=api id=${config.meteringPointId}")
+    _                 <- ZIO.logDebug(s"type=ChannelData action=request external-source=api metering-point-id=${config.meteringPointId} from=${config.offsetDate} to=${config.toDate.getOrElse("∞")}")
     meteringPointData <- DNWGApi.getMeteringPointData(config.meteringPointId, config.offsetDate)
-    _                 <- ZIO.logDebug(s"type=MeteringPointData action=received external-source=api num=${meteringPointData.size}")
-  } yield meteringPointData
+    _                 <- ZIO.logDebug(s"type=ChannelData action=received external-source=api num=${meteringPointData.size}")
+  } yield meteringPoint ++ meteringPointData.map(_.copy(_key))
 
   // send an iterable to kafka as transactional stream
   def sendToKafka[A <: InternalSchemaRecord: Manifest](
     data: Iterable[A]
   ): ZIO[AppEnv with KafkaEnv, Throwable, Unit] = {
     (for {
-      config       <- ZIO.service[AppConfig]
-      manualConfig <- ZIO.service[ManualConfig]
-      clock        <- ZIO.service[Clock]
-      ingestedAt   <- clock.instant
-      _            <- ZIO.logDebug(s"type=${manifest[A].runtimeClass.getSimpleName} action=start external-source=kafka")
+      config     <- ZIO.service[AppConfig]
+      clock      <- ZIO.service[Clock]
+      ingestedAt <- clock.instant
+      _          <- ZIO.logDebug(s"type=${manifest[A].runtimeClass.getSimpleName} action=start external-source=kafka")
       _ <- ZStream
              .fromIterable(data)
              .mapZIO(item =>
                Kafka.createRecord(
                  item,
                  item._headers(config.name, ingestedAt),
-                 Some(s"${manualConfig.meteringPointId}-${item._key.getOrElse("?")}")
+                 item._key(con)
                )()
              )
              .mapChunksZIO(Kafka.produceRecordChunk)

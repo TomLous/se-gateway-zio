@@ -12,7 +12,10 @@ import zio.logging._
 import zio.logging.backend.SLF4J
 import zio.stream._
 
-object Main extends ZIOAppDefault {
+/***
+ * WIP!!!!!
+ */
+object Gateway extends ZIOAppDefault {
 
   val slf4j = SLF4J.slf4j(LogLevel.Debug, LogFormat.colored)
 

@@ -19,7 +19,9 @@ object DNWGResponse {
     meteringdata: List[Measurement],
     description: Option[String],
     direction: Option[String]
-  ) extends InternalSchemaRecord(_key = None, _version = 1)
+  ) extends InternalSchemaRecord(_key = None, _version = 1){
+
+  }
 
   case class Measurement(
     value: Double,
@@ -49,11 +51,11 @@ object DNWGResponse {
     meteringDataAvailableTill: Option[LocalDate],
     location: Location,
     channels: List[Channel]
-  ) extends InternalSchemaRecord(_key = None, _version = 1) {
+  ) extends InternalSchemaRecord(_key = Some(meteringPointID), _version = 1) {
 
-    val msgId = s"$meteringPointID-$ean-$meteringPointType"
+//    val msgId = s"$meteringPointID-$ean-$meteringPointType"
 
-    override val _key: Option[String] = Some(msgId)
+//    override val _key: Option[String] = Some(msgId)
 
   }
 

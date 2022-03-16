@@ -17,6 +17,7 @@ object dnwg {
       toDate: LocalDate
     ): ZIO[Any, DNWGApiError, Iterable[MeteringPointData]]
     def getMeteringPoints: ZIO[Any, DNWGApiError, Iterable[MeteringPoint]]
+    def getMeteringPoint(id: String): ZIO[Any, DNWGApiError, Option[MeteringPoint]]
     def getMeteringPointData(
       id: String,
       fromDate: LocalDate,
@@ -35,6 +36,9 @@ object dnwg {
 
     def getMeteringPoints: ZIO[DNWGApi, DNWGApiError, Iterable[MeteringPoint]] =
       ZIO.serviceWithZIO(_.getMeteringPoints)
+
+    def getMeteringPoint(id: String): ZIO[DNWGApi, DNWGApiError, Option[MeteringPoint]] =
+      ZIO.serviceWithZIO(_.getMeteringPoint(id))
 
     def getMeteringPointData(
       id: String,
@@ -80,7 +84,7 @@ object dnwg {
                     .fromEither(response.body)
                     .foldZIO(apiRequestErrorJson, e => ZIO.succeed(e))
           _ <- ZIO.logDebug(s"action=api-request response-length=${body.length}")
-          _ <- ZIO.logDebug(s"action=api-request response-length=${body}")
+//          _ <- ZIO.logDebug(s"action=api-request response-length=${body}")
           json <- Json
                     .parseJson[T](body)
                     .mapError(e =>
@@ -145,6 +149,9 @@ object dnwg {
       send[RawMeteringPointData](request)
         .map(_.data.items)
     }
+
+    override def getMeteringPoint(id: String): ZIO[Any, DNWGApiError, Option[MeteringPoint]] =
+      getMeteringPoints.map(_.find(meteringPoint => meteringPoint.meteringPointID == id))
   }
 
 }

@@ -11,12 +11,14 @@ abstract class InternalSchemaRecord(
   def _headers(source: String, ingestedAt: Instant): Map[String, String] = {
     Map(
       "ce_specversion" -> "1.0",
-      "ce_type"        -> this.getClass.getName,
+      "ce_type"        -> this.getClass.getName.replace("$", "."),
       "ce_source"      -> source,
       "ce_time"        -> _timestamp.getOrElse(ingestedAt).toString,
       "content-type"   -> "application/json",
       "schema-version" -> _version.toString
     ) ++ _key.map(id => "ce_id" -> id)
   }
+
+  def getKey(overrideKey: Option[String] = None):Option[String] = overrideKey.orElse(_key)
 
 }

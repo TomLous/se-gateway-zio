@@ -79,10 +79,6 @@ object kafka {
       } yield transactionalProducer
     }
 
-//  val live: ZLayer[Kafka, Throwable, Kafka with TransactionalProducer] =
-//    ZLayer.fromService[Config, Kafka] {
-//      KafkaProducerLive
-//    } ++ transactionalProducerLive
 
   object KafkaProducerLive {
     val layer: ZLayer[Config, Throwable, Kafka with TransactionalProducer] =

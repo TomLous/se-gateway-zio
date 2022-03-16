@@ -72,41 +72,12 @@ object Dependencies {
     )
   }
 
-  /*
- lazy val zioVersion           = "1.0.13"
-lazy val zioKafkaVersion      = "0.17.3"
-lazy val zioConfigVersion      = "1.0.9"
-lazy val zioLoggingVersion    = "0.5.14"
-lazy val log4jVersion = "2.17.0"
-lazy val zioJsonVersion       = "0.1.5"
-lazy val json4sVersion       = "4.0.2"
-lazy val kafkaVersion         = "2.8.1"
+  object Avro extends Dep {
+    lazy val avro4sVersion = "4.0.12"
 
-
-
-
-lazy val root = (project in file("."))
-  .settings(
-    name := "se-gateway-zio",
-    libraryDependencies ++= Seq(
-      "dev.zio"                       %% "zio"                    % "1.0.13",
-      "dev.zio"                       %% "zio-streams"            % "1.0.12",
-      "dev.zio"                       %% "zio-kafka"              % "0.17.3",
-      "dev.zio"                       %% "zio-nio"                % "0.4.0",
-
-
-
-
-
-      "dev.zio"                       %% "zio-json"               % "0.1.5",
-      "org.json4s"                    %% "json4s-native"          % "4.0.2",
-
-      "com.softwaremill.sttp.client3" %% "httpclient-backend-zio" % "3.3.17",
-
-      "dev.zio"                       %% "zio-test"               % "1.0.13" % Test
-    ),
-    testFrameworks += new TestFramework("zio.test.sbt.ZTestFramework")
-  )
-   */
+    val deps = Seq(
+      "com.sksamuel.avro4s" %% "avro4s-core" % avro4sVersion
+    )
+  }
 
 }

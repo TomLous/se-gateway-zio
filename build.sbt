@@ -56,7 +56,7 @@ lazy val services =
     .settings(
       commonSettings,
       testSettings,
-      libraryDependencies ++= Zio.deps ++ Json.deps ++  Logging.deps ++ Kafka.deps
+      libraryDependencies ++= Zio.deps ++ Json.deps ++  Logging.deps ++ Kafka.deps ++ Avro.deps ++ Http.deps
     )
     .dependsOn(util)
 
@@ -69,6 +69,21 @@ lazy val dnwgGateway =
       commonSettings,
       testSettings,
       libraryDependencies ++= Zio.deps ++ Json.deps ++ Logging.deps ++ Config.deps ++ Kafka.deps ++ Http.deps
+    )
+    .dependsOn(model)
+    .dependsOn(util)
+    .dependsOn(services)
+
+
+lazy val dnwgTransformer =
+  project
+    .in(file("dnwg-transformer"))
+    //    .enablePlugins(BuildInfoPlugin)
+    .settings(
+      name              := "dnwg-transformer",
+      commonSettings,
+      testSettings,
+      libraryDependencies ++= Zio.deps ++ Json.deps ++ Logging.deps ++ Config.deps ++ Kafka.deps ++ Http.deps ++ Avro.deps
     )
     .dependsOn(model)
     .dependsOn(util)
