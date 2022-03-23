@@ -1,4 +1,4 @@
-import cdf.model.InternalSchemaRecord
+import cdf.model.KafkaMetaRecord
 import cdf.services.kafka._
 import cdf.services.offset._
 import services._
@@ -36,25 +36,33 @@ object Gateway extends ZIOAppDefault {
   type KafkaEnv = Kafka with TransactionalProducer with Clock
 
   // Get all metering point data
-  val getMeteringPointData: ZIO[ApiEnv, Throwable, Iterable[MeteringPointData]] = for {
+  val getMeteringPointData: ZIO[ApiEnv, Throwable, Iterable[KafkaMetaRecord[MeteringPointData]]] = for {
     _                 <- ZIO.logDebug("type=MeteringPointData action=start external-source=api")
     fromDate          <- Offset.getStartOffset
     toDate            <- Offset.getEndOffset(fromDate)
     meteringPointData <- DNWGApi.getAllMeteringPointData(fromDate, toDate)
+    meteringPointRecords <-
+      ZIO.succeed(
+        meteringPointData.map(data => KafkaMetaRecord("dummy", data, key = Some(data.meteringPointID)))
+      )
     _                 <- Offset.setNextOffset(toDate)
     _                 <- ZIO.logDebug(s"type=MeteringPointData action=received external-source=api num=${meteringPointData.size}")
-  } yield meteringPointData
+  } yield meteringPointRecords
 
   // Get all metering points
-  val getMeteringPoints: ZIO[ApiEnv, Throwable, Iterable[MeteringPoint]] = for {
+  val getMeteringPoints: ZIO[ApiEnv, Throwable, Iterable[KafkaMetaRecord[MeteringPoint]]] = for {
     _              <- ZIO.logDebug("type=MeteringPoint action=start external-source=api ")
     meteringPoints <- DNWGApi.getMeteringPoints
+    meteringPointRecords <-
+      ZIO.succeed(
+        meteringPoints.map(data => KafkaMetaRecord("dummy", data, key = Some(data.meteringPointID)))
+      )
     _              <- ZIO.logDebug(s"type=MeteringPoint action=received external-source=api num=${meteringPoints.size}")
-  } yield meteringPoints
+  } yield meteringPointRecords
 
   // send an iterable to kafka as transactional stream
-  def sendToKafka[A <: InternalSchemaRecord: Manifest](
-    data: Iterable[A]
+  def sendToKafka[A <: Product: Manifest](
+    data: Iterable[KafkaMetaRecord[A]]
   ): ZIO[AppEnv with KafkaEnv, Throwable, Unit] = {
     (for {
       config     <- ZIO.service[AppConfig]
@@ -63,7 +71,7 @@ object Gateway extends ZIOAppDefault {
       _          <- ZIO.logDebug(s"type=${manifest[A].runtimeClass.getSimpleName} action=start external-source=kafka")
       _ <- ZStream
              .fromIterable(data)
-             .mapZIO(item => Kafka.createRecord(item, item._headers(config.name, ingestedAt), item._key)())
+             .mapZIO(item => Kafka.createRecord(item.data, item.headers, item.key)())
              .mapChunksZIO(Kafka.produceRecordChunk)
              .runDrain
       _ <- ZIO.logDebug(s"type=${manifest[A].runtimeClass.getSimpleName} action=stop external-source=kafka")

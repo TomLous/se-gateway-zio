@@ -1,4 +1,4 @@
-import cdf.model.InternalSchemaRecord
+import cdf.model.KafkaMetaRecord
 import cdf.services.kafka._
 import services._
 import services.dnwg._
@@ -22,27 +22,50 @@ object ManualBackfill extends ZIOAppDefault {
   private val dnwgApiLayer =
     (AppConfig.live.narrow(_.dnwgApi)
       ++ HttpClientZioBackend.managed().toLayer) >>> DNWGApiLive.layer // feed config + http client into api.live
-  type ApiEnv = DNWGApi with ManualConfig
+  type ApiEnv = DNWGApi with AppEnv
 
   private val kafkaProducerLayer = AppConfig.live.narrow(_.kafka) >>> KafkaProducerLive.layer
   type KafkaEnv = Kafka with TransactionalProducer with Clock
 
   // APP
 
+//  def wrapData[T](container: IterableOnce[Iterable[T]]): ZIO[ApiEnv, Throwable, Iterable[KafkaMetaRecord[T]]] = for{
+//    appConfig     <- ZIO.service[AppConfig]
+//    manualConfig  <- ZIO.service[ManualConfig]
+//    result <-  ZIO.succeed(
+//      container.iterator.map(data => KafkaMetaRecord(appConfig.name, data, key = Some(data.meteringPointID)))
+//    )
+//  } yield  result
+
   // Get  metering point data for id
-  val getMeteringPointData: ZIO[ApiEnv, Throwable, Iterable[InternalSchemaRecord]] = for {
-    config            <- ZIO.service[ManualConfig]
-    _                 <- ZIO.logDebug(s"type=MeteringPoint action=request external-source=api id=${config.meteringPointId}")
-    meteringPoint     <- DNWGApi.getMeteringPoint(config.meteringPointId)
-    _                 <- ZIO.logDebug(s"type=MeteringPoint action=received external-source=api id=${config.meteringPointId}")
-    _                 <- ZIO.logDebug(s"type=ChannelData action=request external-source=api metering-point-id=${config.meteringPointId} from=${config.offsetDate} to=${config.toDate.getOrElse("∞")}")
-    meteringPointData <- DNWGApi.getMeteringPointData(config.meteringPointId, config.offsetDate)
-    _                 <- ZIO.logDebug(s"type=ChannelData action=received external-source=api num=${meteringPointData.size}")
-  } yield meteringPoint ++ meteringPointData.map(_.copy(_key))
+  val getMeteringPointData: ZIO[ApiEnv, Throwable, Iterable[KafkaMetaRecord[_]]] = for {
+    appConfig     <- ZIO.service[AppConfig]
+    manualConfig  <- ZIO.service[ManualConfig]
+    _             <- ZIO.logDebug(s"type=MeteringPoint action=request external-source=api id=${manualConfig.meteringPointId}")
+    meteringPoint <- DNWGApi.getMeteringPoint(manualConfig.meteringPointId)
+    meteringPointRecord <-
+      ZIO.succeed(
+        meteringPoint.map(data => KafkaMetaRecord(appConfig.name, data, key = Some(data.meteringPointID)))
+      )
+    _ <- ZIO.logDebug(s"type=MeteringPoint action=received external-source=api id=${manualConfig.meteringPointId}")
+    _ <-
+      ZIO.logDebug(
+        s"type=ChannelData action=request external-source=api metering-point-id=${manualConfig.meteringPointId} from=${manualConfig.offsetDate} to=${manualConfig.toDate
+          .getOrElse("∞")}"
+      )
+    meteringPointData <- DNWGApi.getMeteringPointData(manualConfig.meteringPointId, manualConfig.offsetDate)
+    meteringPointDataRecords <-
+      ZIO.succeed(
+        meteringPointData.map(data =>
+          KafkaMetaRecord(appConfig.name, data, key = meteringPoint.map(_.meteringPointID))
+        )
+      )
+    _ <- ZIO.logDebug(s"type=ChannelData action=received external-source=api num=${meteringPointData.size}")
+  } yield meteringPointRecord ++ meteringPointDataRecords
 
   // send an iterable to kafka as transactional stream
-  def sendToKafka[A <: InternalSchemaRecord: Manifest](
-    data: Iterable[A]
+  def sendToKafka[A: Manifest](
+    data: Iterable[KafkaMetaRecord[A]]
   ): ZIO[AppEnv with KafkaEnv, Throwable, Unit] = {
     (for {
       config     <- ZIO.service[AppConfig]
@@ -53,9 +76,9 @@ object ManualBackfill extends ZIOAppDefault {
              .fromIterable(data)
              .mapZIO(item =>
                Kafka.createRecord(
-                 item,
-                 item._headers(config.name, ingestedAt),
-                 item._key(con)
+                 item.data,
+                 item.headers,
+                 item.key
                )()
              )
              .mapChunksZIO(Kafka.produceRecordChunk)
@@ -77,6 +100,6 @@ object ManualBackfill extends ZIOAppDefault {
   override def run: ZIO[Environment with ZEnv with ZIOAppArgs, Any, Any] =
     program
       .provideCustomLayer(AppConfig.live ++ ManualConfig.live ++ dnwgApiLayer ++ kafkaProducerLayer)
-      .foldZIO(e => ZIO.logError(e.getMessage), s => ZIO.succeed(s))
+//      .foldZIO(e => ZIO.logError(e.getMessage), s => ZIO.succeed(s))
 
 }

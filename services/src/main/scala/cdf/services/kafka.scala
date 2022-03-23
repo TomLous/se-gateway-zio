@@ -64,12 +64,34 @@ object kafka {
     topic: String,
     brokers: List[String],
     transactionId: String,
+    apiKey: Option[String],
+    apiSecret: Option[String],
     defaultHeaders: Map[String, String] = Map.empty
   ) {
-    lazy val producerSettings: ProducerSettings = ProducerSettings(brokers)
+    private val sasl = (apiKey, apiSecret) match {
+      case (Some(key), Some(secret)) =>
+        Map(
+          "security.protocol" -> "SASL_SSL",
+          "sasl.mechanism" -> "PLAIN",
+          "sasl.jaas.config" -> s"org.apache.kafka.common.security.plain.PlainLoginModule required username='$key' password='$secret';"
+        )
+      case _ => Map.empty[String, String]
+    }
+
+    private val defaultProps = Map(
+      "session.timeout.ms" -> "45000",
+      "acks" -> "all",
+      "client.dns.lookup" -> "use_all_dns_ips"
+    )
+
+
+    lazy val producerSettings: ProducerSettings =
+      ProducerSettings(brokers)
+        .withProperties(defaultProps ++ sasl)
     lazy val transactionalProducerSettings: TransactionalProducerSettings =
       TransactionalProducerSettings(producerSettings, transactionId)
   }
+
 
   val transactionalProducerLive: ZLayer[Config, Throwable, TransactionalProducer] =
     ZLayer.fromManaged {
