@@ -50,6 +50,7 @@ steps:
       docker save -o $(Pipeline.Workspace)/docker/cache.tar cache
     displayName: Docker Cache save
     condition: and(not(canceled()), or(failed(), ne(variables.DOCKER_CACHE_RESTORED, 'true')))
+    continueOnError: true
 
 #  - script: sbt dnwgGateway/docker:publishLocal
 #    displayName: 'Publish Docker Image'
