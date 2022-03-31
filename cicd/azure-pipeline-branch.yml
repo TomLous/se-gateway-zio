@@ -30,11 +30,11 @@ steps:
   - task: Cache@2
     displayName: sbt Cache task
     inputs:
-      key: 'sbt|$(Agent.OS)|build.sbt'
+      key: 'sbt | ivy2 | **/build.sbt | project/Dependencies.scala'
       restoreKeys: |
-        sbt|$(Agent.OS)
-        sbt
-      path: $(Pipeline.Workspace)/.ivy2/cache
+        sbt | ivy2 | **/build.sbt
+        sbt | ivy2
+      path: $(Pipeline.Workspace)/.ivy2
 
   - script: sbt compile
     displayName: Run compile
@@ -42,7 +42,10 @@ steps:
   - script: sbt test
     displayName: Run tests
 
-#  - script: sbt dnwgGateway/graalvm-native-image:packageBin
+  - script: ls -alR $(Pipeline.Workspace)/.ivy2
+
+
+  #  - script: sbt dnwgGateway/graalvm-native-image:packageBin
 #    displayName: 'Create Binary'
 
   - script: |
