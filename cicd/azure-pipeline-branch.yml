@@ -12,42 +12,45 @@ container: 'hseeberger/scala-sbt:graalvm-ce-21.3.0-java17_1.6.2_3.1.1'
 
 steps:
   - task: DockerInstaller@0
-    displayName: 'Docker Installer'
+    displayName: Docker Installer
     inputs:
       dockerVersion: 17.09.0-ce
 
   - task: Cache@2
-    displayName: 'Docker Cache task'
+    displayName: Docker Cache task
     inputs:
-      key: 'docker | "$(Agent.OS)" | cache'
+      key: 'docker|$(Agent.OS)|cache'
       path: $(Pipeline.Workspace)/docker
       cacheHitVar: DOCKER_CACHE_RESTORED
 
   - script: docker load -i $(Pipeline.Workspace)/docker/cache.tar
-    displayName: 'Docker restore'
+    displayName: Docker Cache restore
     condition: and(not(canceled()), eq(variables.DOCKER_CACHE_RESTORED, 'true'))
 
   - task: Cache@2
-    displayName: 'sbt Cache task'
+    displayName: sbt Cache task
     inputs:
-      key: 'sbt | "$(Agent.OS)" | **/build.sbt'
+      key: 'sbt|$(Agent.OS)|build.sbt'
       restoreKeys: |
-        sbt | "$(Agent.OS)"
+        sbt|$(Agent.OS)
         sbt
       path: $(Pipeline.Workspace)/.ivy2/cache
 
-  - script: sbt test
-    displayName: 'Run tests'
+  - script: sbt compile
+    displayName: Run compile
 
-  - script: sbt dnwgGateway/graalvm-native-image:packageBin
-    displayName: 'Create Binary'
+  - script: sbt test
+    displayName: Run tests
+
+#  - script: sbt dnwgGateway/graalvm-native-image:packageBin
+#    displayName: 'Create Binary'
 
   - script: |
       mkdir -p $(Pipeline.Workspace)/docker
       docker save -o $(Pipeline.Workspace)/docker/cache.tar cache
-    displayName: 'Docker save'
+    displayName: Docker Cache save
     condition: and(not(canceled()), or(failed(), ne(variables.DOCKER_CACHE_RESTORED, 'true')))
 
-  - script: sbt dnwgGateway/docker:publishLocal
-    displayName: 'Publish Docker Image'
+#  - script: sbt dnwgGateway/docker:publishLocal
+#    displayName: 'Publish Docker Image'
 
