@@ -5,10 +5,16 @@ trigger:
     exclude:
       - 'main'
 
+variables:
+  - name: SBT_OPTS
+    value: -Divy.home=$(Pipeline.Workspace)/.ivy2 -Dsbt.ivy.home=$(Pipeline.Workspace)/.ivy2
+
+
 pool:
   vmImage: 'ubuntu-latest'
 
 container: 'hseeberger/scala-sbt:graalvm-ce-21.3.0-java17_1.6.2_3.1.1'
+
 
 steps:
   - task: DockerInstaller@0
@@ -42,7 +48,7 @@ steps:
   - script: sbt test
     displayName: Run tests
 
-  - script: ls -alR $(Pipeline.Workspace)
+  - script: ls -alR /
 
 
   #  - script: sbt dnwgGateway/graalvm-native-image:packageBin
