@@ -47,7 +47,7 @@ steps:
 
   - script: |
       mkdir -p $(Pipeline.Workspace)/docker
-      docker save -o $(Pipeline.Workspace)/docker/cache.tar cache
+      docker save $(docker images -q) -o $(Pipeline.Workspace)/docker/cache.tar
     displayName: Docker Cache save
     condition: and(not(canceled()), or(failed(), ne(variables.DOCKER_CACHE_RESTORED, 'true')))
     continueOnError: true
