@@ -16,11 +16,37 @@ steps:
     inputs:
       dockerVersion: 17.09.0-ce
 
+  - task: Cache@2
+    displayName: 'Docker Cache task'
+    inputs:
+      key: 'docker | "$(Agent.OS)" | cache'
+      path: $(Pipeline.Workspace)/docker
+      cacheHitVar: DOCKER_CACHE_RESTORED
+
+  - script: docker load -i $(Pipeline.Workspace)/docker/cache.tar
+    displayName: 'Docker restore'
+    condition: and(not(canceled()), eq(variables.DOCKER_CACHE_RESTORED, 'true'))
+
+  - task: Cache@2
+    displayName: 'sbt Cache task'
+    inputs:
+      key: 'sbt | "$(Agent.OS)" | **/build.sbt'
+      restoreKeys: |
+        sbt | "$(Agent.OS)"
+        sbt
+      path: $(Pipeline.Workspace)/.ivy2/cache
+
   - script: sbt test
     displayName: 'Run tests'
 
   - script: sbt dnwgGateway/graalvm-native-image:packageBin
     displayName: 'Create Binary'
+
+  - script: |
+      mkdir -p $(Pipeline.Workspace)/docker
+      docker save -o $(Pipeline.Workspace)/docker/cache.tar cache
+    displayName: 'Docker save'
+    condition: and(not(canceled()), or(failed(), ne(variables.DOCKER_CACHE_RESTORED, 'true')))
 
   - script: sbt dnwgGateway/docker:publishLocal
     displayName: 'Publish Docker Image'
