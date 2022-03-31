@@ -1,5 +1,12 @@
+trigger:
+  branches:
+    include:
+      - '*'
+    exclude:
+      - 'main'
+
 pool:
-  vmImage: 'Ubuntu-16.04'
+  vmImage: 'ubuntu-latest'
 
 container: 'hseeberger/scala-sbt:graalvm-ce-21.3.0-java17_1.6.2_3.1.1'
 
