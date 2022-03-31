@@ -42,7 +42,7 @@ steps:
   - script: sbt test
     displayName: Run tests
 
-  - script: ls -alR $(Pipeline.Workspace)/.ivy2
+  - script: ls -alR $(Pipeline.Workspace)
 
 
   #  - script: sbt dnwgGateway/graalvm-native-image:packageBin
