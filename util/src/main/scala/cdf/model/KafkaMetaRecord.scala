@@ -6,7 +6,7 @@ case class KafkaMetaRecord[+T](
   source: String,
   data: T,
   key: Option[String] = None,
-  version:  Int = 1,
+  version: Int = 1,
   dataTimestamp: Option[Instant] = None,
   ingestedTimestamp: Option[Instant] = None
 ) {
@@ -21,6 +21,5 @@ case class KafkaMetaRecord[+T](
       "schema-version" -> version.toString
     ) ++ key.map(id => "ce_id" -> id)
   }
-
 
 }

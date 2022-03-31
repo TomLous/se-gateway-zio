@@ -1,0 +1,15 @@
+pool:
+  vmImage: 'Ubuntu-16.04'
+
+container: 'hseeberger/scala-sbt:graalvm-ce-21.3.0-java17_1.6.2_3.1.1'
+
+steps:
+  - script: sbt test
+    displayName: 'Run tests'
+
+  - script: sbt dnwgGateway/graalvm-native-image:packageBin
+    displayName: 'Create Binary'
+
+  - script: sbt dnwgGateway/docker:publishLocal
+    displayName: 'Publish Docker Image'
+

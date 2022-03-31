@@ -11,7 +11,7 @@ object cdp {
   // This is the service definition. All Services (live, mock, etc) need to implement these methods
   trait CDP {
     def getSchema(name: String): ZIO[Any, CDPError, AvroSchema] //AvroSchema
-    def postData(data: String, schema:AvroSchema): ZIO[Any, CDPError, Unit]
+    def postData(data: String, schema: AvroSchema): ZIO[Any, CDPError, Unit]
   }
 
   object CDP {
@@ -45,7 +45,6 @@ object cdp {
 
   // Implementation of the live service
   case class CDPLive(config: Config, backend: SttpClient) extends CDP {
-
 
     // Parse the json to the final class (manifest is needed, since this is a generic implementation)
 

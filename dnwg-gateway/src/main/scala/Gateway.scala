@@ -1,21 +1,9 @@
-import cdf.model.KafkaMetaRecord
-import cdf.services.kafka._
-import cdf.services.offset._
-import services._
-import services.dnwg._
-import smartenergy.DNWGResponse._
-import sttp.client3.httpclient.zio.HttpClientZioBackend
-import zio._
-import zio.config.syntax._
-import zio.kafka.producer._
-import zio.logging._
-import zio.logging.backend.SLF4J
-import zio.stream._
 
-/***
- * WIP!!!!!
+
+/**
+ * * WIP!!!!!
  */
-object Gateway extends ZIOAppDefault {
+object Gateway { /*extends ZIOAppDefault {
 
   val slf4j = SLF4J.slf4j(LogLevel.Debug, LogFormat.colored)
 
@@ -94,5 +82,5 @@ object Gateway extends ZIOAppDefault {
     program
       .provideCustomLayer(AppConfig.live ++ offsetLayer ++ dnwgApiLayer ++ kafkaProducerLayer)
       .foldZIO(e => ZIO.logError(e.getMessage), s => ZIO.succeed(s))
-
+ */
 }

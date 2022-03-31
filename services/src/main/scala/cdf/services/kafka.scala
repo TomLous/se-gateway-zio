@@ -5,7 +5,7 @@ import org.apache.kafka.clients.producer._
 import org.apache.kafka.common.header.Header
 import org.apache.kafka.common.header.internals.RecordHeader
 import zio._
-import zio.kafka.producer._
+import zio.kafka.producer.{Producer, _}
 import zio.kafka.serde.Serde
 
 import java.lang
@@ -24,32 +24,61 @@ object kafka {
   )
 
   // This is the service definition. All Services (live, mock, etc) need to implement these methods
-  trait Kafka {
+  trait KafkaProducer {
     def createRecord[T: Manifest](
       item: T,
       headers: Map[String, String] = Map.empty,
       key: Option[String] = None,
       partition: Option[Int] = None,
       timestamp: Option[LocalDateTime] = None
-    ): ZIO[Any, Throwable, ProducerRecord[String, String]]
+    ): Task[ProducerRecord[String, String]]
 
-    def produceRecordChunk(
+    def produceTransactionalRecordChunk(
       chunk: Chunk[ProducerRecord[String, String]]
-    ): ZIO[Transaction, Throwable, Chunk[RecordMetadata]]
+    ): RIO[Transaction, Chunk[RecordMetadata]]
+
+    def produceRecordChunk(chunk: Chunk[ProducerRecord[String, String]]): Task[Chunk[RecordMetadata]]
   }
 
   // accessors
-  object Kafka {
-    def createRecord[T: Manifest](item: T, headers: Map[String, String] = Map.empty, key: Option[String] = None)(
-      partition: Option[Int] = None,
-      timestamp: Option[LocalDateTime] = None
-    ): ZIO[Kafka, Throwable, ProducerRecord[String, String]] =
-      ZIO.serviceWithZIO(_.createRecord(item, headers, key, partition, timestamp))
+  object KafkaProducer extends Accessible[KafkaProducer] {
+//      def createRecord[T: Manifest](item: T, headers: Map[String, String] = Map.empty, key: Option[String] = None)(
+//      partition: Option[Int] = None,
+//      timestamp: Option[LocalDateTime] = None
+//    ): ZIO[Kafka, Throwable, ProducerRecord[String, String]] =
+//      ZIO.serviceWithZIO(_.createRecord(item, headers, key, partition, timestamp))
+//
+//    def produceTransactionalRecordChunk(
+//      chunk: Chunk[ProducerRecord[String, String]]
+//    ): ZIO[Kafka with Transaction, Throwable, Chunk[RecordMetadata]] =
+//      ZIO.serviceWithZIO[Kafka](_.produceTransactionalRecordChunk(chunk))
+//
+//    def produceRecordChunk(
+//                            chunk: Chunk[ProducerRecord[String, String]]
+//                          ): ZIO[Kafka, Throwable, Chunk[RecordMetadata]] =
+//      ZIO.serviceWithZIO(_.produceRecordChunk(chunk))
 
-    def produceRecordChunk(
-      chunk: Chunk[ProducerRecord[String, String]]
-    ): ZIO[Kafka with Transaction, Throwable, Chunk[RecordMetadata]] =
-      ZIO.serviceWithZIO[Kafka](_.produceRecordChunk(chunk))
+//    private val transactionalProducerLive: ZLayer[Config, Throwable, TransactionalProducer] =
+//      ZLayer.fromManaged {
+//        for {
+//          kafkaConfig           <- ZIO.service[Config].toManaged
+//          transactionalProducer <- TransactionalProducer.make(kafkaConfig.transactionalProducerSettings)
+//        } yield transactionalProducer
+//      }
+
+//    private val producerLive: ZLayer[Config, Throwable, Producer] =
+//      ZLayer.fromManaged {
+//        for {
+//          kafkaConfig <- ZIO.service[Config].toManaged
+//          producer    <- Producer.make(kafkaConfig.producerSettings)
+//        } yield producer
+//      }
+
+//    val transactionalLayer: ZLayer[Config, Throwable, KafkaProducer with TransactionalProducer] =
+//      (KafkaProducerLive(_)).toLayer[KafkaProducer] ++ transactionalProducerLive
+
+    val live: ZLayer[Config, Throwable, KafkaProducer] =
+      (KafkaProducerLive(_)).toLayer
 
     def createTransactionLayer: ZLayer[TransactionalProducer, Throwable, Transaction] =
       for {
@@ -59,7 +88,7 @@ object kafka {
 
   }
 
-  // Config for the API
+  // Config for Kafka
   case class Config(
     topic: String,
     brokers: List[String],
@@ -72,42 +101,48 @@ object kafka {
       case (Some(key), Some(secret)) =>
         Map(
           "security.protocol" -> "SASL_SSL",
-          "sasl.mechanism" -> "PLAIN",
-          "sasl.jaas.config" -> s"org.apache.kafka.common.security.plain.PlainLoginModule required username='$key' password='$secret';"
+          "sasl.mechanism"    -> "PLAIN",
+          "sasl.jaas.config"  -> s"org.apache.kafka.common.security.plain.PlainLoginModule required username='$key' password='$secret';"
         )
       case _ => Map.empty[String, String]
     }
 
     private val defaultProps = Map(
-      "session.timeout.ms" -> "45000",
-      "acks" -> "all",
-      "client.dns.lookup" -> "use_all_dns_ips"
+      "client.id"                             -> "smartenergy-manual",
+      "session.timeout.ms"                    -> "45000",
+      "acks"                                  -> "all",
+      "client.dns.lookup"                     -> "use_all_dns_ips",
+      "max.in.flight.requests.per.connection" -> "1"
     )
-
 
     lazy val producerSettings: ProducerSettings =
       ProducerSettings(brokers)
         .withProperties(defaultProps ++ sasl)
+
     lazy val transactionalProducerSettings: TransactionalProducerSettings =
       TransactionalProducerSettings(producerSettings, transactionId)
   }
 
+//  val transactionalProducerLive: ZLayer[Config, Throwable, TransactionalProducer] =
+//    ZLayer.fromManaged {
+//      for {
+//        kafkaConfig           <- ZIO.service[Config].toManaged
+//        transactionalProducer <- TransactionalProducer.make(kafkaConfig.transactionalProducerSettings)
+//      } yield transactionalProducer
+//    }
 
-  val transactionalProducerLive: ZLayer[Config, Throwable, TransactionalProducer] =
-    ZLayer.fromManaged {
-      for {
-        kafkaConfig           <- ZIO.service[Config].toManaged
-        transactionalProducer <- TransactionalProducer.make(kafkaConfig.transactionalProducerSettings)
-      } yield transactionalProducer
-    }
+//  object KafkaProducerLive {
+//    val transactionalLayer: ZLayer[Config, Throwable, Kafka with TransactionalProducer] =
+//      (KafkaProducerLive(_)).toLayer[Kafka] ++ transactionalProducerLive
+//
+//    val layer: ZLayer[Config, Throwable, Kafka] =
+//      (KafkaProducerLive(_)).toLayer[Kafka]
+//  }
 
+  case class KafkaProducerLive(config: Config) extends KafkaProducer {
 
-  object KafkaProducerLive {
-    val layer: ZLayer[Config, Throwable, Kafka with TransactionalProducer] =
-      (KafkaProducerLive(_)).toLayer[Kafka] ++ transactionalProducerLive
-  }
-
-  case class KafkaProducerLive(config: Config) extends Kafka {
+    lazy private val producerLayer: ZLayer[Any, Throwable, Producer] =
+      ZLayer.fromManaged(Producer.make(config.producerSettings))
 
     private def getRecordHeaders(headers: Map[String, String]): Task[lang.Iterable[Header]] = ZIO(headers.map {
       case (k, v) =>
@@ -162,12 +197,17 @@ object kafka {
 
     }
 
-    override def produceRecordChunk(
+    override def produceTransactionalRecordChunk(
       chunk: Chunk[ProducerRecord[String, String]]
     ): ZIO[Transaction, Throwable, Chunk[RecordMetadata]] =
       for {
         transaction <- ZIO.service[Transaction]
         metadata    <- transaction.produceChunk(chunk, Serde.string, Serde.string, None)
       } yield metadata
+
+    override def produceRecordChunk(
+      chunk: Chunk[ProducerRecord[String, String]]
+    ): Task[Chunk[RecordMetadata]] =
+      Producer.produceChunk(chunk, Serde.string, Serde.string).provideSomeLayer(producerLayer)
   }
 }

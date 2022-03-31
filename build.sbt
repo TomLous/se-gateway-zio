@@ -1,7 +1,19 @@
 import Dependencies._
+import com.typesafe.sbt.packager.docker.Cmd
+import sbt.Keys.libraryDependencies
 lazy val scala213  = "2.13.8"
 lazy val mainScala = scala213
 lazy val allScala  = Seq(scala213)
+
+// Graal/JVM stuff. Needs to be available here https://github.com/orgs/graalvm/packages/container/graalvm-ce/versions
+val oracleLinux  = "8"
+val jvmVersion   = "17"
+val graalVersion = "22"
+
+// Variables
+lazy val baseName       = "smartenergy"
+lazy val baseImage      = "alpine:latest" //3.15.0
+lazy val dockerBasePath = "/opt/docker/bin"
 
 lazy val commonSettings = Seq(
   organizationName         := "schiphol",
@@ -13,7 +25,8 @@ lazy val commonSettings = Seq(
   Test / parallelExecution := false,
   Test / fork              := true,
   run / fork               := true,
-  scalafmtOnCompile := true
+  trapExit                 := false,
+  scalafmtOnCompile        := true
 )
 
 lazy val testSettings = Seq(
@@ -26,6 +39,53 @@ lazy val avroScalaGeneratorSettings = Seq(
   Compile / sourceGenerators += (Compile / avroScalaGenerate).taskValue,
   Test / sourceGenerators += (Test / avroScalaGenerate).taskValue,
   (Compile / avroScalaSource) := new java.io.File(s"${baseDirectory.value}/src/main/scala")
+)
+
+lazy val graalDockerSettings = Seq(
+  GraalVMNativeImage / containerBuildImage := GraalVMNativeImagePlugin
+    .generateContainerBuildImage(s"ghcr.io/graalvm/graalvm-ce:ol$oracleLinux-java$jvmVersion-$graalVersion")
+    // docker manifest inspect ghcr.io/graalvm/graalvm-ce:ol8-java17-22 | jq -r '.manifests[] | select(.platform.architecture == "amd64") | .digest'
+    .value,
+  graalVMNativeImageOptions := Seq(
+    "--verbose",
+    "--no-fallback",
+    "--install-exit-handlers",
+    "--enable-http",
+    "--allow-incomplete-classpath",
+    "--report-unsupported-elements-at-runtime",
+    "-H:+StaticExecutableWithDynamicLibC",
+    "-H:+RemoveSaturatedTypeFlows",
+    "-J-Xmx10G", // TODO Make sure this matches the docker mem available. Also
+    "-H:EnableURLProtocols=http",
+    "-H:EnableURLProtocols=https",
+    "-H:+ReportExceptionStackTraces",
+    "-H:-ThrowUnsafeOffsetErrors",
+    "-H:+PrintClassInitialization"
+  ),
+  dockerBaseImage := baseImage,
+  dockerCommands ++= Seq(
+    Cmd("USER", "root"),
+    Cmd("RUN", "apk update && apk add gcompat"
+//      Cmd("COPY","opt/docker/conf/application.conf","/opt/docker/conf/application.conf"),)
+  ),
+//    dockerChmodType := DockerChmodType.Custom("ugo=rwX"),
+//    dockerAdditionalPermissions += (DockerChmodType.Custom(
+//      "ugo=rwx"
+//    ), dockerBinaryPath.value),
+  Docker / mappings := Seq(
+    ((GraalVMNativeImage / target).value / name.value) -> s"$dockerBasePath/app"
+  ),
+  dockerEntrypoint := Seq(s"$dockerBasePath/app"),
+  dockerRepository := sys.env.get("DOCKER_REPOSITORY"),
+  dockerAlias := DockerAlias(
+    dockerRepository.value,
+    dockerUsername.value,
+    //    s"${organizationName.value}/$baseName-${name.value}".toLowerCase,
+    s"$baseName-${name.value}".toLowerCase,
+    Some(version.value)
+  )
+  //  dockerUpdateLatest := true,
+  //  dockerUsername     := sys.env.get("DOCKER_USERNAME").map(_.toLowerCase)
 )
 
 lazy val root = (project in file("."))
@@ -49,38 +109,40 @@ lazy val model =
     )
     .dependsOn(util)
 
-
 lazy val services =
   project
     .in(file("services"))
     .settings(
       commonSettings,
       testSettings,
-      libraryDependencies ++= Zio.deps ++ Json.deps ++  Logging.deps ++ Kafka.deps ++ Avro.deps ++ Http.deps
+      libraryDependencies ++= Zio.deps ++ Json.deps ++ Logging.deps ++ Kafka.deps ++ Avro.deps ++ Http.deps
     )
     .dependsOn(util)
 
 lazy val dnwgGateway =
   project
     .in(file("dnwg-gateway"))
+    .enablePlugins(GraalVMNativeImagePlugin, DockerPlugin)
 //    .enablePlugins(BuildInfoPlugin)
     .settings(
-      name              := "dnwg-gateway",
+      name := "dnwg-gateway",
       commonSettings,
       testSettings,
+      graalDockerSettings,
+//      dockerBinaryPath    := s"$dockerBasePath/dnwg-gateway",
+      Compile / mainClass := Some("ManualBackfill"),
       libraryDependencies ++= Zio.deps ++ Json.deps ++ Logging.deps ++ Config.deps ++ Kafka.deps ++ Http.deps
     )
     .dependsOn(model)
     .dependsOn(util)
     .dependsOn(services)
 
-
 lazy val dnwgTransformer =
   project
     .in(file("dnwg-transformer"))
     //    .enablePlugins(BuildInfoPlugin)
     .settings(
-      name              := "dnwg-transformer",
+      name := "dnwg-transformer",
       commonSettings,
       testSettings,
       libraryDependencies ++= Zio.deps ++ Json.deps ++ Logging.deps ++ Config.deps ++ Kafka.deps ++ Http.deps ++ Avro.deps
@@ -89,34 +151,4 @@ lazy val dnwgTransformer =
     .dependsOn(util)
     .dependsOn(services)
 
-
-
-
-
-
-//  .settings(
-//    name := "se-gateway-zio",
-//    libraryDependencies ++= Seq(
-//      "dev.zio"                       %% "zio"                    % "1.0.13",
-//      "dev.zio"                       %% "zio-streams"            % "1.0.12",
-//      "dev.zio"                       %% "zio-kafka"              % "0.17.3",
-//      "dev.zio"                       %% "zio-nio"                % "0.4.0",
-//
-//      "dev.zio"                       %% "zio-config"             % "1.0.9",
-//      "dev.zio"                       %% "zio-config-magnolia"    % "1.0.9",
-//      "dev.zio"                       %% "zio-config-typesafe"    % "1.0.9",
-//
-//      "dev.zio"                       %% "zio-logging-slf4j"      % "0.5.14",
-//      "org.apache.logging.log4j"       % "log4j-core"             % "2.17.0",
-//      "org.apache.logging.log4j"       % "log4j-slf4j-impl"       % "2.17.0",
-//      "com.lmax"                       % "disruptor"              % "3.4.4",
-//
-//      "dev.zio"                       %% "zio-json"               % "0.1.5",
-//      "org.json4s"                    %% "json4s-native"          % "4.0.2",
-//
-//      "com.softwaremill.sttp.client3" %% "httpclient-backend-zio" % "3.3.17",
-//
-//      "dev.zio"                       %% "zio-test"               % "1.0.13" % Test
-//    ),
-//    testFrameworks += new TestFramework("zio.test.sbt.ZTestFramework")
-//  )
+lazy val dockerBinaryPath = settingKey[String]("Get the docker path")

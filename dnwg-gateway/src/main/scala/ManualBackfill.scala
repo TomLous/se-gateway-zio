@@ -5,7 +5,6 @@ import services.dnwg._
 import sttp.client3.httpclient.zio.HttpClientZioBackend
 import zio._
 import zio.config.syntax._
-import zio.kafka.producer._
 import zio.logging._
 import zio.logging.backend.SLF4J
 import zio.stream._
@@ -24,8 +23,8 @@ object ManualBackfill extends ZIOAppDefault {
       ++ HttpClientZioBackend.managed().toLayer) >>> DNWGApiLive.layer // feed config + http client into api.live
   type ApiEnv = DNWGApi with AppEnv
 
-  private val kafkaProducerLayer = AppConfig.live.narrow(_.kafka) >>> KafkaProducerLive.layer
-  type KafkaEnv = Kafka with TransactionalProducer with Clock
+  private val kafkaProducerLayer = AppConfig.live.narrow(_.kafka) >>> KafkaProducer.live
+  type KafkaEnv = KafkaProducer with Clock
 
   // APP
 
@@ -56,9 +55,7 @@ object ManualBackfill extends ZIOAppDefault {
     meteringPointData <- DNWGApi.getMeteringPointData(manualConfig.meteringPointId, manualConfig.offsetDate)
     meteringPointDataRecords <-
       ZIO.succeed(
-        meteringPointData.map(data =>
-          KafkaMetaRecord(appConfig.name, data, key = meteringPoint.map(_.meteringPointID))
-        )
+        meteringPointData.map(data => KafkaMetaRecord(appConfig.name, data, key = meteringPoint.map(_.meteringPointID)))
       )
     _ <- ZIO.logDebug(s"type=ChannelData action=received external-source=api num=${meteringPointData.size}")
   } yield meteringPointRecord ++ meteringPointDataRecords
@@ -71,23 +68,25 @@ object ManualBackfill extends ZIOAppDefault {
       config     <- ZIO.service[AppConfig]
       clock      <- ZIO.service[Clock]
       ingestedAt <- clock.instant
-      _          <- ZIO.logDebug(s"type=${manifest[A].runtimeClass.getSimpleName} action=start external-source=kafka")
+      _          <- ZIO.logDebug(s"type=${manifest[A].getClass.getSimpleName} action=start external-source=kafka")
       _ <- ZStream
              .fromIterable(data)
              .mapZIO(item =>
-               Kafka.createRecord(
-                 item.data,
-                 item.headers,
-                 item.key
-               )()
+               KafkaProducer(
+                 _.createRecord(
+                   item.data,
+                   item.headers,
+                   item.key
+                 )
+               )
              )
-             .mapChunksZIO(Kafka.produceRecordChunk)
+             .mapChunksZIO(chunk => KafkaProducer(_.produceRecordChunk(chunk)))
              .runDrain
       _ <- ZIO.logDebug(s"type=${manifest[A].runtimeClass.getSimpleName} action=stop external-source=kafka")
     } yield ())
-      .provideSomeLayer[AppEnv with KafkaEnv]( // assume AppEnv & KafkaEnv are provided, just add the Transaction Layer
-        Kafka.createTransactionLayer
-      )
+//      .provideSomeLayer[AppEnv with KafkaEnv]( // assume AppEnv & KafkaEnv are provided, just add the Transaction Layer
+//        Kafka.createTransactionLayer
+//      )
   }
 
   // compose the program to be run

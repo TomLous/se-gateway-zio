@@ -53,8 +53,6 @@ object DNWGResponse {
 
 //    override val _key: Option[String] = Some(msgId)
 
-
-
   case class MeteringPointData(
     meteringPointID: String,
     channels: List[ChannelData]

@@ -10,7 +10,7 @@ import java.time.LocalDate
 case class ManualConfig(
   meteringPointId: String,
   offsetDate: LocalDate,
-  toDate: Option[LocalDate]=None
+  toDate: Option[LocalDate] = None
 )
 
 object ManualConfig {
