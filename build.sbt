@@ -65,7 +65,7 @@ lazy val graalDockerSettings = Seq(
   dockerBaseImage := baseImage,
   dockerCommands ++= Seq(
     Cmd("USER", "root"),
-    Cmd("RUN", "apk update && apk add gcompat"
+    Cmd("RUN", "apk update && apk add gcompat"),
 //      Cmd("COPY","opt/docker/conf/application.conf","/opt/docker/conf/application.conf"),)
   ),
 //    dockerChmodType := DockerChmodType.Custom("ugo=rwX"),
