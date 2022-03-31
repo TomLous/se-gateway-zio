@@ -55,16 +55,20 @@ steps:
     displayName: Run manual backfill
     continueOnError: true
 
-  - script: sbt dnwgGateway/graalvm-native-image:stage
-    displayName: 'Stage Binary'
+  - script: sbt dnwgGateway/graalvm-native-image:packageBin
+    displayName: 'Create Binary'
+    continueOnError: true
+
+  - script: ls -al $(Pipeline.Workspace)/dnwg-gateway/target/
+    displayName: 'List Files'
     continueOnError: true
 
   - script: jar tvf $(Pipeline.Workspace)/dnwg-gateway/target/graalvm-native-image/stage/lib/nl.schiphol.dna.cdf.dnwg-gateway-0.1.0.jar
-    displayName: 'List Binary'
+    displayName: 'List Binary Content'
     continueOnError: true
 
-  - script: sbt dnwgGateway/graalvm-native-image:packageBin
-    displayName: 'Create Binary'
+  - script: cat $(Pipeline.Workspace)/dnwg-gateway/target/graalvm-native-image/reports/*
+    displayName: 'List Graal Reports'
     continueOnError: true
 
   - script: |
