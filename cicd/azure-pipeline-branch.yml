@@ -51,8 +51,21 @@ steps:
   - script: docker images
     displayName: List docker images
 
+  - script: sbt "dnwgGateway/runMain ManualBackfill"
+    displayName: Run manual backfill
+    continueOnError: true
+
+  - script: sbt dnwgGateway/graalvm-native-image:stage
+    displayName: 'Stage Binary'
+    continueOnError: true
+
+  - script: jar tvf $(Pipeline.Workspace)/dnwg-gateway/target/graalvm-native-image/stage/lib/nl.schiphol.dna.cdf.dnwg-gateway-0.1.0.jar
+    displayName: 'List Binary'
+    continueOnError: true
+
   - script: sbt dnwgGateway/graalvm-native-image:packageBin
     displayName: 'Create Binary'
+    continueOnError: true
 
   - script: |
       mkdir -p $(Pipeline.Workspace)/docker
@@ -61,6 +74,6 @@ steps:
     condition: and(not(canceled()), or(failed(), ne(variables.DOCKER_CACHE_RESTORED, 'true')))
     continueOnError: true
 
-#  - script: sbt dnwgGateway/docker:publishLocal
-#    displayName: 'Publish Docker Image'
-
+  - script: sbt dnwgGateway/docker:publishLocal
+    displayName: 'Publish Docker Image'
+    continueOnError: true
