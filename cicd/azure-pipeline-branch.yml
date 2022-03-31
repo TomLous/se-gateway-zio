@@ -48,8 +48,6 @@ steps:
   - script: sbt test
     displayName: Run tests
 
-  - script: ls -alR /
-
 
   #  - script: sbt dnwgGateway/graalvm-native-image:packageBin
 #    displayName: 'Create Binary'
