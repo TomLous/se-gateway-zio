@@ -13,8 +13,8 @@ variables:
 pool:
   vmImage: 'ubuntu-latest'
 
+#todo create own scala runners
 container: 'hseeberger/scala-sbt:graalvm-ce-21.3.0-java17_1.6.2_3.1.1'
-
 
 steps:
   - task: DockerInstaller@0
@@ -56,7 +56,7 @@ steps:
 
   - script: |
       mkdir -p $(Pipeline.Workspace)/docker
-      docker save $(docker images -q) -o $(Pipeline.Workspace)/docker/cache.tar
+      docker save $(docker images "ghcr.io-graalvm-**" -q) -o $(Pipeline.Workspace)/docker/cache.tar
     displayName: Docker Cache save
     condition: and(not(canceled()), or(failed(), ne(variables.DOCKER_CACHE_RESTORED, 'true')))
     continueOnError: true
