@@ -14,7 +14,7 @@ addSbtPlugin("com.julianpeeters" % "sbt-avrohugger" % "2.0.0")
 addSbtPlugin("org.scalameta" % "sbt-native-image" % "0.3.2")
 
 // Package code natively. Used for Graal \w Docker https://github.com/sbt/sbt-native-packager
-addSbtPlugin("com.github.sbt" % "sbt-native-packager" % "1.9.8")
+addSbtPlugin("com.github.sbt" % "sbt-native-packager" % "1.9.9")
 
 // Automated release process https://github.com/sbt/sbt-release
 addSbtPlugin("com.github.sbt" % "sbt-release" % "1.1.0")

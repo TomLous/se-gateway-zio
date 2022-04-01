@@ -135,7 +135,7 @@ lazy val dnwgGateway =
       testSettings,
       graalDockerSettings,
 //      dockerBinaryPath    := s"$dockerBasePath/dnwg-gateway",
-      Compile / mainClass := Some("ManualBackfill"),
+      Compile / mainClass := Some("HelloWorld"),
       libraryDependencies ++= Zio.deps ++ Json.deps ++ Logging.deps ++ Config.deps ++ Kafka.deps ++ Http.deps
     )
     .dependsOn(model)
