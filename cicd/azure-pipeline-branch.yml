@@ -59,15 +59,15 @@ steps:
     displayName: 'Create Binary'
     continueOnError: true
 
-  - script: ls -al $(Pipeline.Workspace)/dnwg-gateway/target/
+  - script: ls -al $(Pipeline.Workspace)/s/dnwg-gateway/target/
     displayName: 'List Files'
     continueOnError: true
 
-  - script: jar tvf $(Pipeline.Workspace)/dnwg-gateway/target/graalvm-native-image/stage/lib/nl.schiphol.dna.cdf.dnwg-gateway-0.1.0.jar
+  - script: jar tvf $(Pipeline.Workspace)/s/dnwg-gateway/target/graalvm-native-image/stage/lib/nl.schiphol.dna.cdf.dnwg-gateway-0.1.0.jar
     displayName: 'List Binary Content'
     continueOnError: true
 
-  - script: cat $(Pipeline.Workspace)/dnwg-gateway/target/graalvm-native-image/reports/*
+  - script: cat $(Pipeline.Workspace)/s/dnwg-gateway/target/graalvm-native-image/reports/*
     displayName: 'List Graal Reports'
     continueOnError: true
 
