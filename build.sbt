@@ -50,17 +50,19 @@ lazy val graalDockerSettings = Seq(
     "--static",
     "--verbose",
     "--no-fallback",
-    "--no-server",
+//    "--no-server",
     "--install-exit-handlers",
     "--initialize-at-build-time",
     "--enable-http",
     "--enable-https",
     "--enable-url-protocols=https,http",
     "--allow-incomplete-classpath",
+    "--diagnostics-mode",
+    "--initialize-at-run-time=org.apache.kafka.common.security.authenticator.SaslClientAuthenticator",
     "--report-unsupported-elements-at-runtime",
     "-H:+StaticExecutableWithDynamicLibC",
     "-H:+RemoveSaturatedTypeFlows",
-    "-J-Xmx10G", // TODO Make sure this matches the docker mem available. Also
+    "-J-Xmx10G", // TODO Make sure this matches the docker mem available.
     "-H:+ReportExceptionStackTraces",
     "-H:-ThrowUnsafeOffsetErrors",
     "-H:+PrintClassInitialization"
