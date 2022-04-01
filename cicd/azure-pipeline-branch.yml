@@ -22,16 +22,16 @@ steps:
     inputs:
       dockerVersion: 17.09.0-ce
 
-  - task: Cache@2
-    displayName: Docker Cache task
-    inputs:
-      key: 'docker|$(Agent.OS)|cache'
-      path: $(Pipeline.Workspace)/docker
-      cacheHitVar: DOCKER_CACHE_RESTORED
-
-  - script: docker load -i $(Pipeline.Workspace)/docker/cache.tar
-    displayName: Docker Cache restore
-    condition: and(not(canceled()), eq(variables.DOCKER_CACHE_RESTORED, 'true'))
+#  - task: Cache@2
+#    displayName: Docker Cache task
+#    inputs:
+#      key: 'docker|$(Agent.OS)|cache'
+#      path: $(Pipeline.Workspace)/docker
+#      cacheHitVar: DOCKER_CACHE_RESTORED
+#
+#  - script: docker load -i $(Pipeline.Workspace)/docker/cache.tar
+#    displayName: Docker Cache restore
+#    condition: and(not(canceled()), eq(variables.DOCKER_CACHE_RESTORED, 'true'))
 
   - task: Cache@2
     displayName: sbt Cache task
@@ -51,24 +51,24 @@ steps:
   - script: docker images
     displayName: List docker images
 
-  - script: sbt "dnwgGateway/runMain ManualBackfill"
-    displayName: Run manual backfill
-    continueOnError: true
+#  - script: sbt "dnwgGateway/runMain ManualBackfill"
+#    displayName: Run manual backfill
+#    continueOnError: true
 
   - script: sbt dnwgGateway/graalvm-native-image:packageBin
-    displayName: 'Create Binary'
+    displayName: Create Binary
     continueOnError: true
 
   - script: ls -al $(Pipeline.Workspace)/s/dnwg-gateway/target/
-    displayName: 'List Files'
+    displayName: 'tmp: List Files'
     continueOnError: true
 
   - script: jar tvf $(Pipeline.Workspace)/s/dnwg-gateway/target/graalvm-native-image/stage/lib/nl.schiphol.dna.cdf.dnwg-gateway-0.1.0.jar
-    displayName: 'List Binary Content'
+    displayName: 'tmp: List Binary Content'
     continueOnError: true
 
   - script: cat $(Pipeline.Workspace)/s/dnwg-gateway/target/graalvm-native-image/reports/*
-    displayName: 'List Graal Reports'
+    displayName: 'tmp: List Graal Reports'
     continueOnError: true
 
   - script: |
