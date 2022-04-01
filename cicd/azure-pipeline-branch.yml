@@ -67,7 +67,7 @@ steps:
     displayName: 'tmp: List Binary Content'
     continueOnError: true
 
-  - script: cat $(Pipeline.Workspace)/s/dnwg-gateway/target/graalvm-native-image/reports/*
+  - script: ls -alR $(Pipeline.Workspace)/s/dnwg-gateway/target/graalvm-native-image/
     displayName: 'tmp: List Graal Reports'
     continueOnError: true
 

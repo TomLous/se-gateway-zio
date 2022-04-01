@@ -8,7 +8,7 @@ lazy val allScala  = Seq(scala213)
 // Graal/JVM stuff. Needs to be available here https://github.com/orgs/graalvm/packages/container/graalvm-ce/versions
 val oracleLinux  = "8"
 val jvmVersion   = "17"
-val graalVersion = "21.3.1"
+val graalVersion = "22"
 
 // Variables
 lazy val baseName       = "smartenergy"
@@ -50,16 +50,17 @@ lazy val graalDockerSettings = Seq(
     "--static",
     "--verbose",
     "--no-fallback",
+    "--no-server",
     "--install-exit-handlers",
+    "--initialize-at-build-time",
     "--enable-http",
     "--enable-https",
+    "--enable-url-protocols=https,http",
     "--allow-incomplete-classpath",
     "--report-unsupported-elements-at-runtime",
     "-H:+StaticExecutableWithDynamicLibC",
     "-H:+RemoveSaturatedTypeFlows",
     "-J-Xmx10G", // TODO Make sure this matches the docker mem available. Also
-//    "-H:EnableURLProtocols=http",
-//    "-H:EnableURLProtocols=https",
     "-H:+ReportExceptionStackTraces",
     "-H:-ThrowUnsafeOffsetErrors",
     "-H:+PrintClassInitialization"
