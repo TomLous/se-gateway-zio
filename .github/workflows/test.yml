@@ -1,7 +1,6 @@
 name: 'Automatic: On Push'
 
-on:
-  push:
+on: push
 
 jobs:
   build:
@@ -15,7 +14,9 @@ jobs:
           fetch-depth: 0
 
       - name: Setup Java and Scala
-        uses: olafurpg/setup-scala@v10
+        uses: olafurpg/setup-scala@v11
+        with:
+          java-version: graalvm@
 
       - name: Cache sbt
         uses: actions/cache@v2
