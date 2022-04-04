@@ -3,9 +3,7 @@ name: 'Automatic: On Push'
 on:
   push:
     branches:
-      - 'feature/**'
-      - 'hotfix'
-      - 'main'
+      - '*'
 
 jobs:
   build:
