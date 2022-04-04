@@ -1,0 +1,43 @@
+name: 'Automatic: On Push'
+
+on:
+  push:
+    branches:
+      - 'feature/**'
+      - 'hotfix'
+      - 'main'
+
+jobs:
+  build:
+    name: Build & Test
+    runs-on: ubuntu-18.04
+
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+
+      - name: Setup Java and Scala
+        uses: olafurpg/setup-scala@v10
+
+      - name: Cache sbt
+        uses: actions/cache@v2
+        with:
+          path: |
+            ~/.sbt
+            ~/.ivy2/cache
+          key: ${{ runner.os }}-sbt-cache-v2-${{ hashFiles('**/*.sbt') }}-${{ hashFiles('project/build.properties') }}
+
+      - name: Compile
+        shell: bash
+        run: sbt compile
+
+      - name: Test
+        shell: bash
+        run: sbt test
+
+      - name: Create Binary
+        shell: bash
+        run: sbt dnwgGateway/graalvm-native-image:packageBin
+
